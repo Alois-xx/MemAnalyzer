@@ -43,7 +43,7 @@ namespace MemAnalyzer
         /// <summary>
         /// Create a filter where the process id is already kown.
         /// </summary>
-        /// <param name="pidFilter">Pid of rocess to search </param>
+        /// <param name="pidFilter">Pid of process to search </param>
         public ProcessFilter(int pidFilter):this(pidFilter, null,null)
         {
         }
@@ -51,7 +51,7 @@ namespace MemAnalyzer
         /// <summary>
         /// Select all processes which match this process name.
         /// </summary>
-        /// <param name="processNameFilter">Process name to select. E.g. Notepad.exe matching is case insenstive.</param>
+        /// <param name="processNameFilter">Process name to select. E.g. Notepad.exe matching is case insensitive.</param>
         public ProcessFilter(string processNameFilter)
             : this(0, processNameFilter, null)
         { }
@@ -59,17 +59,17 @@ namespace MemAnalyzer
         /// <summary>
         /// Select all processes which match the process name and the corresponding command line substrings.
         /// </summary>
-        /// <param name="processNameFilter">Process name to select. E.g. Notepad.exe matching is case insenstive.</param>
-        /// <param name="cmdLine">e.g. -VortalUI to select the vortal UI</param>
+        /// <param name="processNameFilter">Process name to select. E.g. Notepad.exe matching is case insensitive.</param>
+        /// <param name="cmdLine">Substring command line filter.</param>
         public ProcessFilter(string processNameFilter, string cmdLine):this(0, processNameFilter, new string[] { cmdLine }) 
         { }
 
         /// <summary>
         /// Select all processes which match the process name and the corresponding command line substrings. Multiple cmd line filter strings
-        /// form an and condition for one process comand line to create a match. 
+        /// form an and condition for one process command line to create a match. 
         /// </summary>
-        /// <param name="processNameFilter">Process name to select. E.g. Notepad.exe matching is case insenstive.</param>
-        /// <param name="cmdLineFilters">e.g. GenericReader MMOnco to select all generic reader processes of onco taskflows.</param>
+        /// <param name="processNameFilter">Process name to select. E.g. Notepad.exe matching is case insensitive.</param>
+        /// <param name="cmdLineFilters">Substring command line filters.</param>
         public ProcessFilter(string processNameFilter, string[] cmdLineFilters)
             : this(0, processNameFilter, cmdLineFilters)
         { }

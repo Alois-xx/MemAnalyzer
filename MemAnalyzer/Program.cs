@@ -24,14 +24,17 @@ namespace MemAnalyzer
                                 "       -gc xxx or \"\"        Force GC in process with id or if xxx is not a number it is treated as a command line substring filter. E.g. -forceGC GenericReader" + Environment.NewLine +
                                 "                            will force a GC in all generic reader processes. Use \"\" as filter if you use -process to force a GC in all executables." + Environment.NewLine +
                                 "       -process xxx.exe     (optional) Name of executable in which a GC should happen. Must contain .exe in its name." + Environment.NewLine +
-                                "       -o output.csv        Write output to csv file instead of console" + Environment.NewLine + 
+                                "       -o output.csv        Write output to csv file instead of console" + Environment.NewLine +
                                 "Examples" + Environment.NewLine +
                                 "Dump types by size from dump file." + Environment.NewLine +
                                 "\tMemAnalyzer -f xx.dmp -dts" + Environment.NewLine +
                                 "Dump types by object count from a running process with process id ddd." + Environment.NewLine +
                                 "\tMemAnalyzer -pid ddd -dts" + Environment.NewLine +
                                 "Diff two memory dump files where (f2 - f) are calculated." + Environment.NewLine +
-                                "\tMemAnalyzer -f dump1.dmp -f2 dump2.dmp -dts";
+                                "\tMemAnalyzer -f dump1.dmp -f2 dump2.dmp -dts" + Environment.NewLine +
+                                "Dump string duplicates of live process and write it to CSV file" + Environment.NewLine +
+                                "\tMemAnalyzer -pid ddd -dstrings -o StringDuplicates.csv" + Environment.NewLine;
+                            
 
 
 
@@ -208,28 +211,28 @@ namespace MemAnalyzer
                     OutputStringWriter.Output = new StreamWriter(OutFile);
                 }
                 analyzer = CreateAnalyzer(Action);
-
                 switch (Action)
                 {
                     case Actions.None:
                         Help("No command specified.");
                         break;
                     case Actions.DumpTypesByCount:
-                        (analyzer as MemAnalyzer).DumpTypes(TopN, false);
+                        (analyzer as MemAnalyzer)?.DumpTypes(TopN, false);
                         break;
                     case Actions.DumpTypesBySize:
-                        (analyzer as MemAnalyzer).DumpTypes(TopN, true);
+                        (analyzer as MemAnalyzer)?.DumpTypes(TopN, true);
                         break;
                     case Actions.ForceGC:
                         ForceGCCommand cmd = new ForceGCCommand(ProcessNameFilter, CmdLineFilter, Pid);
                         cmd.ForceGC();
                         break;
                     case Actions.DumpStrings:
-                        (analyzer as StringStatisticsCommand).Execute(TopN);
+                        (analyzer as StringStatisticsCommand)?.Execute(TopN);
                         break;
                     default:
                         throw new NotSupportedException(String.Format("Command {0} is not recognized as a valid command", this.Action));
                 }
+                
                 
             }
             finally
@@ -295,6 +298,10 @@ namespace MemAnalyzer
             {
                 Target = DataTarget.AttachToProcess(Pid, 5000u);
                 heap = GetHeap(Target);
+                if( heap == null )
+                {
+                    Console.WriteLine($"Error: Could not get managed heap of process {Pid}. Most probably it is an unmanaged process.");
+                }
             }
 
             if( Pid2 != 0 & Target2 == null )
@@ -303,21 +310,27 @@ namespace MemAnalyzer
                 heap2 = GetHeap(Target2);
             }
 
-            switch (action)
+            if (heap != null)
             {
-                case Actions.DumpTypesByCount:
-                case Actions.DumpTypesBySize:
-                    return new MemAnalyzer(heap, heap2, LiveOnly);
-                case Actions.DumpStrings:
-                    return new StringStatisticsCommand(heap, heap2, LiveOnly);
-                case Actions.ForceGC:
-                    return null;
-                case Actions.None:
-                    return null;
-                default:
-                    return null;
+                switch (action)
+                {
+                    case Actions.DumpTypesByCount:
+                    case Actions.DumpTypesBySize:
+                        return new MemAnalyzer(heap, heap2, LiveOnly);
+                    case Actions.DumpStrings:
+                        return new StringStatisticsCommand(heap, heap2, LiveOnly);
+                    case Actions.ForceGC:
+                        return null;
+                    case Actions.None:
+                        return null;
+                    default:
+                        return null;
+                }
             }
-
+            else
+            {
+                return null;
+            }
         }
 
         enum Actions

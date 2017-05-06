@@ -18,6 +18,10 @@ namespace MemAnalyzer
 
         public MemAnalyzerBase(ClrHeap heap, ClrHeap heap2, bool liveOnly)
         {
+            if( heap == null )
+            {
+                throw new ArgumentNullException("heap was null.");
+            }
             Heap = heap;
             Heap2 = heap2;
             LiveOnly = liveOnly;
