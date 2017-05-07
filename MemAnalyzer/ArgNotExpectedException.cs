@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 
 namespace MemAnalyzer
 {
+    [Serializable]
     class ArgNotExpectedException : ArgumentException
     {
         public ArgNotExpectedException(string message):base(message)

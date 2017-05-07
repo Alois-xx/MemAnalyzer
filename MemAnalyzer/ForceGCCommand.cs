@@ -139,7 +139,7 @@ namespace MemAnalyzer
         private static bool IsWin64(Process process)
         {
             bool retVal = false;
-            bool success =  IsWow64Process(process.Handle, out retVal);
+            bool success =  NativeMethods.IsWow64Process(process.Handle, out retVal);
             if( success )
             {
                 return !retVal;
@@ -149,10 +149,5 @@ namespace MemAnalyzer
                 throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not determine process bitness.");
             }
         }
-
-        [DllImport("kernel32.dll", SetLastError = true, CallingConvention = CallingConvention.Winapi)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        internal static extern bool IsWow64Process([In] IntPtr process, [Out] out bool wow64Process);
-
     }
 }

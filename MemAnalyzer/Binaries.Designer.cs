@@ -61,6 +61,35 @@ namespace MemAnalyzer {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to &lt;?xml version=&quot;1.0&quot; encoding=&quot;utf-8&quot; ?&gt;
+        ///&lt;configuration&gt;
+        ///    &lt;startup&gt; 
+        ///        &lt;supportedRuntime version=&quot;v4.0&quot; sku=&quot;.NETFramework,Version=v4.5&quot; /&gt;
+        ///    &lt;/startup&gt;
+        ///  &lt;runtime&gt;
+        ///    &lt;!--- Multi threaded allocation if faster with Server GC. This plays a role if two dumps are diffed. --&gt;
+        ///    &lt;gcServer enabled=&quot;true&quot;/&gt;
+        ///  &lt;/runtime&gt;
+        ///
+        ///&lt;/configuration&gt;.
+        /// </summary>
+        public static string App {
+            get {
+                return ResourceManager.GetString("App", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized resource of type System.Byte[].
+        /// </summary>
+        public static byte[] MemAnalyzerx64 {
+            get {
+                object obj = ResourceManager.GetObject("MemAnalyzerx64", resourceCulture);
+                return ((byte[])(obj));
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized resource of type System.Byte[].
         /// </summary>
         public static byte[] Microsoft_Diagnostics_Runtime {

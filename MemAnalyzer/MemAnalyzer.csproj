@@ -3,12 +3,11 @@
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
-    <Platform Condition=" '$(Platform)' == '' ">x64</Platform>
+    <Platform Condition=" '$(Platform)' == '' ">x86</Platform>
     <ProjectGuid>{704ACD93-A01C-4E09-8DF0-1D1D60ADDF75}</ProjectGuid>
     <OutputType>Exe</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>MemAnalyzer</RootNamespace>
-    <AssemblyName>MemAnalyzer$(Platform)</AssemblyName>
     <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
   </PropertyGroup>
@@ -23,6 +22,7 @@
     <WarningLevel>4</WarningLevel>
     <Prefer32Bit>false</Prefer32Bit>
     <UseVSHostingProcess>false</UseVSHostingProcess>
+    <AssemblyName>MemAnalyzerx64</AssemblyName>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <PlatformTarget>x86</PlatformTarget>
@@ -32,6 +32,7 @@
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <AssemblyName>MemAnalyzerx64</AssemblyName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'">
     <DebugSymbols>true</DebugSymbols>
@@ -41,6 +42,7 @@
     <PlatformTarget>x64</PlatformTarget>
     <ErrorReport>prompt</ErrorReport>
     <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
+    <AssemblyName>MemAnalyzerx64</AssemblyName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x64'">
     <OutputPath>..\..\bin\Release\</OutputPath>
@@ -50,7 +52,7 @@
     <PlatformTarget>x64</PlatformTarget>
     <ErrorReport>prompt</ErrorReport>
     <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
-    <Prefer32Bit>true</Prefer32Bit>
+    <AssemblyName>MemAnalyzerx64</AssemblyName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x86'">
     <DebugSymbols>true</DebugSymbols>
@@ -60,6 +62,7 @@
     <PlatformTarget>x86</PlatformTarget>
     <ErrorReport>prompt</ErrorReport>
     <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
+    <AssemblyName>MemAnalyzer</AssemblyName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x86'">
     <OutputPath>..\..\bin\Release\</OutputPath>
@@ -69,7 +72,7 @@
     <PlatformTarget>x86</PlatformTarget>
     <ErrorReport>prompt</ErrorReport>
     <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
-    <Prefer32Bit>true</Prefer32Bit>
+    <AssemblyName>MemAnalyzer</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="Microsoft.Diagnostics.Runtime, Version=0.8.31.1, Culture=neutral, processorArchitecture=MSIL">
@@ -94,6 +97,7 @@
     <Compile Include="InternalExtensions.cs" />
     <Compile Include="MemAnalyzer.cs" />
     <Compile Include="MemAnalyzerBase.cs" />
+    <Compile Include="NativeMethods.cs" />
     <Compile Include="ObjectSet.cs" />
     <Compile Include="ProcessFilter.cs" />
     <Compile Include="Program.cs" />
@@ -108,17 +112,23 @@
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
+    <Content Include="ExternalBinaries\MemAnalyzerx64.exe" />
     <Content Include="ExternalBinaries\Microsoft.Diagnostics.Runtime.dll" />
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="Binaries.resx">
-      <Generator>PublicResXFileCodeGenerator</Generator>
-      <LastGenOutput>Binaries.Designer.cs</LastGenOutput>
-    </EmbeddedResource>
+  <EmbeddedResource Include="Binaries.resx">
+    <Generator>PublicResXFileCodeGenerator</Generator>
+    <LastGenOutput>Binaries.Designer.cs</LastGenOutput>
+  </EmbeddedResource>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
-    <PreBuildEvent>copy /Y $(SolutionDir)packages\Microsoft.Diagnostics.Runtime.Latest.0.8.31.3\lib\net45\Microsoft.Diagnostics.Runtime.dll $(ProjectDir)ExternalBinaries</PreBuildEvent>
+    <PreBuildEvent>copy /Y $(SolutionDir)packages\Microsoft.Diagnostics.Runtime.Latest.0.8.31.3\lib\net45\Microsoft.Diagnostics.Runtime.dll $(ProjectDir)\ExternalBinaries
+IF NOT EXIST "$(ProjectDir)ExternalBinaries\$(ProjectName)x64.exe" echo "Dummy Exe to make it buildable" &gt; $(ProjectDir)ExternalBinaries\$(ProjectName)x64.exe
+IF "$(PlatformName)" EQU "x64" echo "Dummy Exe to make resulting binary smaller" &gt; $(ProjectDir)ExternalBinaries\$(ProjectName)x64.exe</PreBuildEvent>
+  </PropertyGroup>
+  <PropertyGroup>
+    <PostBuildEvent>IF "$(PlatformName)" EQU "x64" copy /Y $(OutDir)$(ProjectName)x64.exe  $(ProjectDir)ExternalBinaries</PostBuildEvent>
   </PropertyGroup>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.

@@ -1,6 +1,7 @@
 ﻿using Microsoft.Diagnostics.Runtime;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -36,8 +37,6 @@ namespace MemAnalyzer
                                 "\tMemAnalyzer -pid ddd -dstrings -o StringDuplicates.csv" + Environment.NewLine;
                             
 
-
-
         private string[] Args;
 
         string DumpFile = null;
@@ -49,6 +48,8 @@ namespace MemAnalyzer
         DataTarget Target = null;
         DataTarget Target2 = null;
 
+        public static bool IsDebug = false;
+        bool IsChild = false;
         int Pid = 0;
         string DacDll = null;
         string CmdLineFilter = null;
@@ -113,8 +114,14 @@ namespace MemAnalyzer
                         case "-pid":
                             Pid = int.Parse(NotAnArg(args.Dequeue()));
                             break;
+                        case "-child":
+                            IsChild = true;
+                            break;
                         case "-pid2":
                             Pid2 = int.Parse(NotAnArg(args.Dequeue()));
+                            break;
+                        case "-debug":
+                            IsDebug = true;
                             break;
                         case "-sep":
                             string sep = NotAnArg(args.Dequeue());
@@ -166,6 +173,8 @@ namespace MemAnalyzer
                             break;
                         case "-o":
                             OutFile = NotAnArg(args.Dequeue());
+                            TopN = 20 * 1000; // if output is dumped to file pipe all types to output
+                                              // if later -dts/-dstrings/-dtn is specified one can still override this behavior.
                             break;
                         default:
                             throw new ArgNotExpectedException(param);
@@ -206,7 +215,6 @@ namespace MemAnalyzer
             {
                 if( !String.IsNullOrEmpty(OutFile))
                 {
-                    Console.WriteLine($"Writing output to csv file {OutFile}");
                     OutputStringWriter.CsvOutput = true;
                     OutputStringWriter.Output = new StreamWriter(OutFile);
                 }
@@ -238,6 +246,10 @@ namespace MemAnalyzer
             finally
             {
                 OutputStringWriter.Flush();
+                if( OutputStringWriter.CsvOutput )
+                {
+                    Console.WriteLine($"Writing output to csv file {OutFile}");
+                }
 
                 if (analyzer != null)
                 {
@@ -266,16 +278,50 @@ namespace MemAnalyzer
             try
             {
                 runtime = clrVersion.CreateRuntime();
+                return runtime.GetHeap();
             }
             catch (Exception)
             {
                 Console.WriteLine("Error: Is the dump file opened by another process (debugger)? If yes close the debugger first.");
-                Console.WriteLine("       If the dump comes from a different computer with another CLR version that you are running on your machine you need to download the matching mscordacwks.dll first. Check out https://1drv.ms/f/s!AhcFq7XO98yJgoMwuPd7LNioVKAp_A and download the matching version/s.", clrVersion.Version);
+                Console.WriteLine("       If the dump comes from a different computer with another CLR version {0} that you are running on your machine you need to download the matching mscordacwks.dll first. Check out https://1drv.ms/f/s!AhcFq7XO98yJgoMwuPd7LNioVKAp_A and download the matching version/s.", clrVersion.Version);
                 Console.WriteLine("       Then set _NT_SYMBOL_PATH=PathToYourDownloadedMscordackwks.dll  e.g. _NT_SYMBOL_PATH=c:\\temp\\mscordacwks in the shell where you did execute MemAnalyzer and then try again.");
                 Console.WriteLine();
                 throw;
             }
-            return runtime.GetHeap();
+        }
+
+        private void RestartWithx64()
+        {
+            string appDir = Environment.ExpandEnvironmentVariables($"%AppData%\\MemAnalyzer\\{Assembly.GetExecutingAssembly().GetName().Version}");
+            Directory.CreateDirectory(appDir);
+            string exe = Path.Combine(appDir, "MemAnalyzerx64.exe");
+            if (!File.Exists(exe))
+            {
+                File.WriteAllBytes(exe, Binaries.MemAnalyzerx64);
+                // Deploy app.config
+                File.WriteAllText(exe + ".config", Binaries.App);
+            }
+
+            if (Program.IsDebug)
+            {
+                Console.WriteLine("Starting x64 child {0}", exe);
+            }
+
+
+            ProcessStartInfo info = new ProcessStartInfo(exe, GetQuotedArgs() + " -child")
+            {
+                UseShellExecute = false,
+                WindowStyle = ProcessWindowStyle.Hidden,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true
+            };
+            var p = Process.Start(info);
+            string output = null;
+            while( (output =  p.StandardOutput.ReadLine()) != null )
+            {
+                Console.WriteLine(output);
+            }
+            p.WaitForExit();
         }
 
         MemAnalyzerBase CreateAnalyzer(Actions action)
@@ -283,31 +329,54 @@ namespace MemAnalyzer
             ClrHeap heap = null;
             ClrHeap heap2 = null;
 
-            if (this.DumpFile != null)
+            try
             {
-                Target = DataTarget.LoadCrashDump(DumpFile, CrashDumpReader.ClrMD);
-                heap = GetHeap(Target);
-            }
-            if (this.DumpFile2 != null)
-            {
-                Target2 = DataTarget.LoadCrashDump(DumpFile2, CrashDumpReader.ClrMD);
-                heap2 = GetHeap(Target2);
-            }
-
-            if( Pid != 0 && Target == null)
-            {
-                Target = DataTarget.AttachToProcess(Pid, 5000u);
-                heap = GetHeap(Target);
-                if( heap == null )
+                if (this.DumpFile != null)
                 {
-                    Console.WriteLine($"Error: Could not get managed heap of process {Pid}. Most probably it is an unmanaged process.");
+                    Target = DataTarget.LoadCrashDump(DumpFile, CrashDumpReader.ClrMD);
+                    heap = GetHeap(Target);
+                }
+                if (this.DumpFile2 != null)
+                {
+                    Target2 = DataTarget.LoadCrashDump(DumpFile2, CrashDumpReader.ClrMD);
+                    heap2 = GetHeap(Target2);
+                }
+
+                if (Pid != 0 && Target == null)
+                {
+                    Target = DataTarget.AttachToProcess(Pid, 5000u);
+                    heap = GetHeap(Target);
+                    if (heap == null)
+                    {
+                        Console.WriteLine($"Error: Could not get managed heap of process {Pid}. Most probably it is an unmanaged process.");
+                    }
+                }
+
+                if (Pid2 != 0 & Target2 == null)
+                {
+                    Target2 = DataTarget.AttachToProcess(Pid2, 5000u);
+                    heap2 = GetHeap(Target2);
                 }
             }
-
-            if( Pid2 != 0 & Target2 == null )
+            catch(Exception ex)
             {
-                Target2 = DataTarget.AttachToProcess(Pid2, 5000u);
-                heap2 = GetHeap(Target2);
+                // Default is a 32 bit process if runtime creation fails with InvalidOperationException or a DAC location failure
+                // we try x64 as fall back. This will work if the bitness of the dump file is wrong.
+                if (!this.IsChild && (ex is FileNotFoundException || ex is InvalidOperationException || ex is ClrDiagnosticsException) && IntPtr.Size == 4)
+                {
+                    // If csv output file was already opened close it to allow child process to write to it.
+                    if (OutputStringWriter.CsvOutput == true)
+                    {
+                        OutputStringWriter.Output.Close();
+                        OutputStringWriter.Output = Console.Out;
+                        OutputStringWriter.CsvOutput = false;
+                    }
+                    RestartWithx64();
+                }
+               else
+                {
+                    throw;
+                }
             }
 
             if (heap != null)
@@ -331,6 +400,24 @@ namespace MemAnalyzer
             {
                 return null;
             }
+        }
+
+        static string GetQuotedArgs()
+        {
+            string args = "";
+            string currArg;
+            foreach (var arg in Environment.GetCommandLineArgs().Skip(1))
+            {
+                currArg = arg;
+                if (currArg.Contains(" "))
+                {
+                    currArg = "\"" + currArg + "\"";
+                }
+
+                args += currArg + " ";
+            }
+
+            return args;
         }
 
         enum Actions
