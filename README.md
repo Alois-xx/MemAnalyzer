@@ -11,7 +11,7 @@ It can show which objects use most space on the managed heap just like !DumpHeap
 
 # Examples
 ### Dump objects by size (-dts dd)
-*C>MemAnalyzerx.exe -dts -pid 1234*
+*C>MemAnalyzer.exe -dts -pid 1234*
 
 		Allocated(Bytes)        Instances(Count)        Type
 		2,529,742               61,330                  System.String
@@ -30,7 +30,7 @@ It can show which objects use most space on the managed heap just like !DumpHeap
 		3,764,046               72,671                  Total(Allocated)
 
 ### Dump objects by count (-dtn dd)
-*C>MemAnalyzerx.exe -dtn -f 50KStringsx64.dmp*
+*C>MemAnalyzer.exe -dtn -f 50KStringsx64.dmp*
 
 		Allocated(Bytes)        Instances(Count)        Type
 		2,529,742               61,330                  System.String
@@ -46,7 +46,7 @@ It can show which objects use most space on the managed heap just like !DumpHeap
 		3,764,046               72,671                  Total(Allocated)
 
 ### Show String Waste Statistics (-dts dd)
-*C>MemAnalyzerx.exe -dstrings -f 50KStringsx64.dmp*
+*C>MemAnalyzer.exe -dstrings -f 50KStringsx64.dmp*
 
 		Strings(Count)  Waste(Bytes)    String
 		500             20,958          String 0
