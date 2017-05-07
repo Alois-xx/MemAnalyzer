@@ -10,7 +10,7 @@ It can show which objects use most space on the managed heap just like !DumpHeap
 - Optional CSV output 
 
 # Examples
-### Dump objects by size (-dts dd)
+### Dump Types by size (-dts dd)
 *C>MemAnalyzer.exe -dts -pid 1234*
 
 		Allocated(Bytes)        Instances(Count)        Type
@@ -29,7 +29,7 @@ It can show which objects use most space on the managed heap just like !DumpHeap
 		44,922                                          Total(Free)
 		3,764,046               72,671                  Total(Allocated)
 
-### Dump objects by count (-dtn dd)
+### Dump Types by count (-dtn dd)
 *C>MemAnalyzer.exe -dtn -f 50KStringsx64.dmp*
 
 		Allocated(Bytes)        Instances(Count)        Type
@@ -89,8 +89,7 @@ It can show which objects use most space on the managed heap just like !DumpHeap
 		   -dtn N               Dump top N types by object count. Default for N is 20.
 		   -dstrings N          Dump top N duplicate strings and global statistics. Default for N is 20.
 		   -live                If present only reachable (live) objects are considered in the statistics. Takes longer to calculate.
-		   -gc xxx or ""        Force GC in process with id or if xxx is not a number it is treated as a command line substring filter. E.g. -forceGC GenericReader
-								will force a GC in all generic reader processes. Use "" as filter if you use -process to force a GC in all executables.
+		   -gc xxx              Force GC in process with id or if xxx is not a number it is treated as a command line substring filter.
 		   -process xxx.exe     (optional) Name of executable in which a GC should happen. Must contain .exe in its name.
 		   -o output.csv        Write output to csv file instead of console
 	Examples

@@ -22,8 +22,7 @@ namespace MemAnalyzer
                                $"       -dtn N               Dump top N types by object count. Default for N is {TopN}." + Environment.NewLine +
                                $"       -dstrings N          Dump top N duplicate strings and global statistics. Default for N is {TopN}." + Environment.NewLine +
                                 "       -live                If present only reachable (live) objects are considered in the statistics. Takes longer to calculate." + Environment.NewLine +
-                                "       -gc xxx or \"\"        Force GC in process with id or if xxx is not a number it is treated as a command line substring filter. E.g. -forceGC GenericReader" + Environment.NewLine +
-                                "                            will force a GC in all generic reader processes. Use \"\" as filter if you use -process to force a GC in all executables." + Environment.NewLine +
+                                "       -gc xxx              Force GC in process with id or if xxx is not a number it is treated as a command line substring filter." + Environment.NewLine +
                                 "       -process xxx.exe     (optional) Name of executable in which a GC should happen. Must contain .exe in its name." + Environment.NewLine +
                                 "       -o output.csv        Write output to csv file instead of console" + Environment.NewLine +
                                 "Examples" + Environment.NewLine +
