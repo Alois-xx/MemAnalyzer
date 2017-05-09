@@ -24,7 +24,7 @@ namespace MemAnalyzer
                                $"       -dtn N               Dump top N types by object count. Default for N is {TopN}." + Environment.NewLine +
                                $"       -dstrings N          Dump top N duplicate strings and global statistics. Default for N is {TopN}." + Environment.NewLine +
                                 "       -live                If present only reachable (live) objects are considered in the statistics. Takes longer to calculate." + Environment.NewLine +
-                                "       -dacdir dir          If the dump file is from a machine with a different version you can tell MemAnalyzer in which directory to search for matching dac dlls."  + Environment.NewLine +
+                                "       -dacdir dir          If the dump file is from a machine with a different version you can tell MemAnalyzer in which directory to search for matching dac dlls." + Environment.NewLine +
                                $"                            See {DacCollection} for a collection of dac dlls from .NET 2.0 up to 4.7." + Environment.NewLine +
                                 "       -gc xxx              Force GC in process with id or if xxx is not a number it is treated as a command line substring filter." + Environment.NewLine +
                                 "       -process xxx.exe     (optional) Name of executable in which a GC should happen. Must contain .exe in its name." + Environment.NewLine +
@@ -84,7 +84,7 @@ namespace MemAnalyzer
                     p.Run();
                 }
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
                 ReturnCode = -1;
                 Help("Got Exception: {0}", ex);
@@ -93,7 +93,7 @@ namespace MemAnalyzer
             return ReturnCode;
         }
 
-        static void Help(string msg=null, params object[] args)
+        static void Help(string msg = null, params object[] args)
         {
             if (ShowHelpMessage)
             {
@@ -104,6 +104,8 @@ namespace MemAnalyzer
                 Console.WriteLine(msg, args);
             }
         }
+
+
 
 
         private bool Parse()
@@ -124,12 +126,14 @@ namespace MemAnalyzer
                     switch (param.ToLower())
                     {
                         case "-f":
+                            SetDefaultActionIfNotSet();
                             DumpFile = NotAnArg(args.Dequeue());
                             break;
                         case "-f2":
                             DumpFile2 = NotAnArg(args.Dequeue());
                             break;
                         case "-pid":
+                            SetDefaultActionIfNotSet();
                             Pid = int.Parse(NotAnArg(args.Dequeue()));
                             break;
                         case "-child":
@@ -489,6 +493,13 @@ namespace MemAnalyzer
             return args;
         }
 
+        void SetDefaultActionIfNotSet()
+        {
+            if (Action == Actions.None)
+            {
+                Action = Actions.DumpTypesBySize;
+            }
+        }
         enum Actions
         {
             None = 0,
