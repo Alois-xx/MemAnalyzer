@@ -107,6 +107,8 @@
     <Compile Include="StringStatisticsCommand.cs" />
     <Compile Include="TypeDiffStatistics.cs" />
     <Compile Include="TypeInstance.cs" />
+    <Compile Include="VMMapData.cs" />
+    <Compile Include="VMMap.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />

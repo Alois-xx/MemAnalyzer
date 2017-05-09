@@ -68,10 +68,14 @@
   <ItemGroup>
     <Compile Include="OutputStringWriterTests.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="VMMapTests.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Dumps\50KStrings.dmp" />
     <None Include="Dumps\Empty.dmp" />
+    <Content Include="Dumps\vmmap.csv">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
