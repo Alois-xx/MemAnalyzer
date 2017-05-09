@@ -93,6 +93,7 @@
       <DesignTime>True</DesignTime>
       <DependentUpon>Binaries.resx</DependentUpon>
     </Compile>
+    <Compile Include="DebugPrinter.cs" />
     <Compile Include="ForceGCCommand.cs" />
     <Compile Include="InternalExtensions.cs" />
     <Compile Include="MemAnalyzer.cs" />
@@ -116,10 +117,10 @@
     <Content Include="ExternalBinaries\Microsoft.Diagnostics.Runtime.dll" />
   </ItemGroup>
   <ItemGroup>
-  <EmbeddedResource Include="Binaries.resx">
-    <Generator>PublicResXFileCodeGenerator</Generator>
-    <LastGenOutput>Binaries.Designer.cs</LastGenOutput>
-  </EmbeddedResource>
+    <EmbeddedResource Include="Binaries.resx">
+      <Generator>PublicResXFileCodeGenerator</Generator>
+      <LastGenOutput>Binaries.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>

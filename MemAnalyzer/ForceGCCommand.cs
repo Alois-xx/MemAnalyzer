@@ -110,7 +110,7 @@ namespace MemAnalyzer
 
                 ProcessStartInfo start = null;
                 string heapDumpArg = String.Format("/forceGC {0}", pid);
-                start = new ProcessStartInfo(IsWin64(p) ? HeapDumpx64Path : HeapDumpx86Path, heapDumpArg)
+                start = new ProcessStartInfo(NativeMethods.IsWin64(p) ? HeapDumpx64Path : HeapDumpx86Path, heapDumpArg)
                 {
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
@@ -136,18 +136,6 @@ namespace MemAnalyzer
             }
         }
 
-        private static bool IsWin64(Process process)
-        {
-            bool retVal = false;
-            bool success =  NativeMethods.IsWow64Process(process.Handle, out retVal);
-            if( success )
-            {
-                return !retVal;
-            }
-            else
-            {
-                throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not determine process bitness.");
-            }
-        }
+
     }
 }

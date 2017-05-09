@@ -5,12 +5,14 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.InteropServices;
 
 namespace MemAnalyzer
 {
     class Program
     {
         static int TopN = 20;
+        const string DacCollection = "https://1drv.ms/f/s!AhcFq7XO98yJgoMwuPd7LNioVKAp_A";
 
         static string HelpStr = String.Format("MemAnalyzer {0} by Alois Kraus 2017", Assembly.GetExecutingAssembly().GetName().Version) + Environment.NewLine +
                                 "Usage: MemAnalyzer [ -f DumpFile or -pid ddd [ -f2 DumpFile or -pid2 ddd ] -dts [N] or -dtn [N] or -dstring [N] [-live] ] [-gc xxx [-process xxx.exe]] [-o Output.csv [-sep \t]]" + Environment.NewLine +
@@ -22,6 +24,8 @@ namespace MemAnalyzer
                                $"       -dtn N               Dump top N types by object count. Default for N is {TopN}." + Environment.NewLine +
                                $"       -dstrings N          Dump top N duplicate strings and global statistics. Default for N is {TopN}." + Environment.NewLine +
                                 "       -live                If present only reachable (live) objects are considered in the statistics. Takes longer to calculate." + Environment.NewLine +
+                                "       -dacdir dir          If the dump file is from a machine with a different version you can tell MemAnalyzer in which directory to search for matching dac dlls."  + Environment.NewLine +
+                               $"                            See {DacCollection} for a collection of dac dlls from .NET 2.0 up to 4.7" + Environment.NewLine +
                                 "       -gc xxx              Force GC in process with id or if xxx is not a number it is treated as a command line substring filter." + Environment.NewLine +
                                 "       -process xxx.exe     (optional) Name of executable in which a GC should happen. Must contain .exe in its name." + Environment.NewLine +
                                 "       -o output.csv        Write output to csv file instead of console" + Environment.NewLine +
@@ -34,9 +38,16 @@ namespace MemAnalyzer
                                 "\tMemAnalyzer -f dump1.dmp -f2 dump2.dmp -dts" + Environment.NewLine +
                                 "Dump string duplicates of live process and write it to CSV file" + Environment.NewLine +
                                 "\tMemAnalyzer -pid ddd -dstrings -o StringDuplicates.csv" + Environment.NewLine;
-                            
+
+        /// <summary>
+        /// Returned by COMException if dump could not be loaded into current address space. 
+        /// This happens usually when a 64 bit dump is loaded into a 32 bit process or if two x86 dumps are loaded for comparison.
+        /// </summary>
+        const int HResultNotEnoughStorage = -2147024888;
 
         private string[] Args;
+
+        static bool ShowHelpMessage = true;
 
         string DumpFile = null;
         string DumpFile2 { get; set; }
@@ -60,7 +71,9 @@ namespace MemAnalyzer
             this.Args = args;
         }
 
-        static void Main(string[] args)
+        static int ReturnCode = 0;
+
+        static int Main(string[] args)
         {
             try
             {
@@ -73,13 +86,19 @@ namespace MemAnalyzer
             }
             catch(Exception ex)
             {
+                ReturnCode = -1;
                 Help("Got Exception: {0}", ex);
             }
+
+            return ReturnCode;
         }
 
         static void Help(string msg=null, params object[] args)
         {
-            Console.WriteLine(HelpStr);
+            if (ShowHelpMessage)
+            {
+                Console.WriteLine(HelpStr);
+            }
             if (msg != null)
             {
                 Console.WriteLine(msg, args);
@@ -157,8 +176,10 @@ namespace MemAnalyzer
                         case "-live":
                             LiveOnly = true;
                             break;
-                        case "-dac":
+                        case "-dacdir":
                             DacDll = NotAnArg(args.Dequeue());
+                            // quoted mscordacwks file paths are not correctly treated so far. 
+                            Environment.SetEnvironmentVariable("_NT_SYMBOL_PATH", DacDll.Trim(new char[] { '"' }));
                             break;
                         case "-process":
                             ProcessNameFilter = NotAnArg(args.Dequeue());
@@ -210,6 +231,7 @@ namespace MemAnalyzer
         private void Run()
         {
             MemAnalyzerBase analyzer = null;
+            ShowHelpMessage = false; // When we now throw exceptions it is not due to wrong command line arguments. 
             try
             {
                 if( !String.IsNullOrEmpty(OutFile))
@@ -239,12 +261,11 @@ namespace MemAnalyzer
                     default:
                         throw new NotSupportedException(String.Format("Command {0} is not recognized as a valid command", this.Action));
                 }
-                
-                
             }
             finally
             {
                 OutputStringWriter.Flush();
+
                 if( OutputStringWriter.CsvOutput )
                 {
                     Console.WriteLine($"Writing output to csv file {OutFile}");
@@ -282,7 +303,7 @@ namespace MemAnalyzer
             catch (Exception)
             {
                 Console.WriteLine("Error: Is the dump file opened by another process (debugger)? If yes close the debugger first.");
-                Console.WriteLine("       If the dump comes from a different computer with another CLR version {0} that you are running on your machine you need to download the matching mscordacwks.dll first. Check out https://1drv.ms/f/s!AhcFq7XO98yJgoMwuPd7LNioVKAp_A and download the matching version/s.", clrVersion.Version);
+                Console.WriteLine("       If the dump comes from a different computer with another CLR version {0} that you are running on your machine you need to download the matching mscordacwks.dll first. Check out " + DacCollection + " and download the matching version/s.", clrVersion.Version);
                 Console.WriteLine("       Then set _NT_SYMBOL_PATH=PathToYourDownloadedMscordackwks.dll  e.g. _NT_SYMBOL_PATH=c:\\temp\\mscordacwks in the shell where you did execute MemAnalyzer and then try again.");
                 Console.WriteLine();
                 throw;
@@ -291,9 +312,27 @@ namespace MemAnalyzer
 
         private void RestartWithx64()
         {
-            string appDir = Environment.ExpandEnvironmentVariables($"%AppData%\\MemAnalyzer\\{Assembly.GetExecutingAssembly().GetName().Version}");
-            Directory.CreateDirectory(appDir);
-            string exe = Path.Combine(appDir, "MemAnalyzerx64.exe");
+            if( IntPtr.Size == 8)
+            {
+                return;
+            }
+
+            if( IsChild )
+            {
+                Console.WriteLine("Recursion detected. Do not start any further child process. Please file an issue at https://github.com/Alois-xx/MemAnalyzer/issues");
+                return;
+            }
+
+            string exe = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "MemAnalyzerx64.exe");
+
+            // if -debug is specified do not deploy the exe into AppData. Instead start it from the location where where the main exe is located
+            if( !IsDebug )
+            {
+                string appDir = Environment.ExpandEnvironmentVariables($"%AppData%\\MemAnalyzer\\{Assembly.GetExecutingAssembly().GetName().Version}");
+                Directory.CreateDirectory(appDir);
+                exe = Path.Combine(appDir, "MemAnalyzerx64.exe");
+            }
+
             if (!File.Exists(exe))
             {
                 File.WriteAllBytes(exe, Binaries.MemAnalyzerx64);
@@ -301,12 +340,7 @@ namespace MemAnalyzer
                 File.WriteAllText(exe + ".config", Binaries.App);
             }
 
-            if (Program.IsDebug)
-            {
-                Console.WriteLine("Starting x64 child {0}", exe);
-            }
-
-
+            DebugPrinter.Write("Starting x64 child {0}", exe);
             ProcessStartInfo info = new ProcessStartInfo(exe, GetQuotedArgs() + " -child")
             {
                 UseShellExecute = false,
@@ -343,6 +377,20 @@ namespace MemAnalyzer
 
                 if (Pid != 0 && Target == null)
                 {
+                    if( !NativeMethods.ProcessExists(Pid) )
+                    {
+                        Console.WriteLine($"Error: Process {Pid} is not running.");
+                        return null;
+                    }
+
+                    // do not try wrong bitness when we know it will fail anyway
+                    if ( NativeMethods.IsWin64(Pid) && IntPtr.Size == 4) 
+                    {
+                        DebugPrinter.Write($"Starting x64 because Pid {Pid} is Win64 process");
+                        RestartWithx64();
+                        return null;
+                    }
+
                     Target = DataTarget.AttachToProcess(Pid, 5000u);
                     heap = GetHeap(Target);
                     if (heap == null)
@@ -353,6 +401,27 @@ namespace MemAnalyzer
 
                 if (Pid2 != 0 & Target2 == null)
                 {
+                    if (!NativeMethods.ProcessExists(Pid2))
+                    {
+                        Console.WriteLine($"Error: Process {Pid2} is not running.");
+                        return null;
+                    }
+
+                    // Cannot load data from processes with different bitness
+                    if(Pid != 0 && (NativeMethods.IsWin64(Pid) != NativeMethods.IsWin64(Pid2) ) )
+                    {
+                        Console.WriteLine($"Error: Process {Pid} and {Pid2} are of different bitness. You can dump each one separately to CSV files and compare the CSV files instead.");
+                        return null;
+                    }
+
+                    // do not try wrong bitness when we know it will fail anyway
+                    if ( NativeMethods.IsWin64(Pid2) && IntPtr.Size == 4 )
+                    {
+                        DebugPrinter.Write($"Starting x64 because Pid2 {Pid2} is Win64 process");
+                        RestartWithx64();
+                        return null;
+                    }
+
                     Target2 = DataTarget.AttachToProcess(Pid2, 5000u);
                     heap2 = GetHeap(Target2);
                 }
@@ -361,7 +430,8 @@ namespace MemAnalyzer
             {
                 // Default is a 32 bit process if runtime creation fails with InvalidOperationException or a DAC location failure
                 // we try x64 as fall back. This will work if the bitness of the dump file is wrong.
-                if (!this.IsChild && (ex is FileNotFoundException || ex is InvalidOperationException || ex is ClrDiagnosticsException) && IntPtr.Size == 4)
+                if(IntPtr.Size == 4 && (ex is FileNotFoundException || ex is InvalidOperationException || ex is ClrDiagnosticsException ||
+                                       (ex is COMException && ex.HResult == HResultNotEnoughStorage)) ) 
                 {
                     // If csv output file was already opened close it to allow child process to write to it.
                     if (OutputStringWriter.CsvOutput == true)
