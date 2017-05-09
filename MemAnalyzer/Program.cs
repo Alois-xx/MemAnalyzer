@@ -327,6 +327,14 @@ namespace MemAnalyzer
                 return;
             }
 
+            // If csv output file was already opened close it to allow child process to write to it.
+            if (OutputStringWriter.CsvOutput == true)
+            {
+                OutputStringWriter.Output.Close();
+                OutputStringWriter.Output = Console.Out;
+                OutputStringWriter.CsvOutput = false;
+            }
+
             string exe = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "MemAnalyzerx64.exe");
 
             // if -debug is specified do not deploy the exe into AppData. Instead start it from the location where where the main exe is located
@@ -437,13 +445,6 @@ namespace MemAnalyzer
                 if(IntPtr.Size == 4 && (ex is FileNotFoundException || ex is InvalidOperationException || ex is ClrDiagnosticsException ||
                                        (ex is COMException && ex.HResult == HResultNotEnoughStorage)) ) 
                 {
-                    // If csv output file was already opened close it to allow child process to write to it.
-                    if (OutputStringWriter.CsvOutput == true)
-                    {
-                        OutputStringWriter.Output.Close();
-                        OutputStringWriter.Output = Console.Out;
-                        OutputStringWriter.CsvOutput = false;
-                    }
                     RestartWithx64();
                 }
                else
