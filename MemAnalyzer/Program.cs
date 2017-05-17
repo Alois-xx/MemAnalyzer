@@ -273,11 +273,13 @@ namespace MemAnalyzer
 
         private void Run()
         {
+            AddProcessStartDirectoryToPath();
+
             MemAnalyzerBase analyzer = null;
             ShowHelpMessage = false; // When we now throw exceptions it is not due to wrong command line arguments. 
             try
             {
-                if( !String.IsNullOrEmpty(OutFile))
+                if (!String.IsNullOrEmpty(OutFile))
                 {
                     OutputStringWriter.CsvOutput = true;
                     OutputStringWriter.Output = new StreamWriter(OutFile);
@@ -289,15 +291,15 @@ namespace MemAnalyzer
                         Help("No command specified.");
                         break;
                     case Actions.DumpTypesByCount:
-                        int ?allocatedKB  = (analyzer as MemAnalyzer)?.DumpTypes(TopN, false);
+                        int? allocatedKB = (analyzer as MemAnalyzer)?.DumpTypes(TopN, false);
                         if (allocatedKB != null)
                         {
                             ReturnCode = allocatedKB.Value;
                         }
                         break;
                     case Actions.DumpTypesBySize:
-                        allocatedKB  = (analyzer as MemAnalyzer)?.DumpTypes(TopN, true);
-                        if( allocatedKB != null )
+                        allocatedKB = (analyzer as MemAnalyzer)?.DumpTypes(TopN, true);
+                        if (allocatedKB != null)
                         {
                             ReturnCode = allocatedKB.Value;
                         }
@@ -317,7 +319,7 @@ namespace MemAnalyzer
             {
                 OutputStringWriter.Flush();
 
-                if( OutputStringWriter.CsvOutput )
+                if (OutputStringWriter.CsvOutput)
                 {
                     Console.WriteLine($"Writing output to csv file {OutFile}");
                 }
@@ -330,11 +332,22 @@ namespace MemAnalyzer
                 {
                     Target.Dispose();
                 }
-                if( Target2 != null)
+                if (Target2 != null)
                 {
                     Target2.Dispose();
                 }
             }
+        }
+
+        /// <summary>
+        /// Fixes issues with tools deployed side by side with the executable but the current working directory might 
+        /// be different.
+        /// </summary>
+        private static void AddProcessStartDirectoryToPath()
+        {
+            string path = Environment.GetEnvironmentVariable("PATH");
+            path += ";" + Path.GetDirectoryName(Assembly.GetEntryAssembly().Location);
+            Environment.SetEnvironmentVariable("PATH", path);
         }
 
         public ClrHeap GetHeap(DataTarget target)

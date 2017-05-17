@@ -42,6 +42,7 @@ namespace MemAnalyzer
             string line;
             string dumpFileName = null;
             List<string> lines = new List<string>();
+            bool procDumpError = false;
             while( (line = p.StandardOutput.ReadLine()) != null )
             {
                 lines.Add(line);
@@ -50,7 +51,12 @@ namespace MemAnalyzer
                     Console.WriteLine(line);
                 }
 
-                if (dumpFileName == null)
+                if( line.Contains("Error creating dump file"))
+                {
+                    procDumpError = true;
+                }
+
+                if (dumpFileName == null && procDumpError == false)
                 { 
                     dumpFileName = GetDumpFileName(line);
                 }
