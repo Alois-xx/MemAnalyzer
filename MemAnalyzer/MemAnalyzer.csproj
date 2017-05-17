@@ -94,7 +94,7 @@
       <DependentUpon>Binaries.resx</DependentUpon>
     </Compile>
     <Compile Include="DebugPrinter.cs" />
-    <Compile Include="ForceGCCommand.cs" />
+    <Compile Include="DumpCreator.cs" />
     <Compile Include="InternalExtensions.cs" />
     <Compile Include="MemAnalyzer.cs" />
     <Compile Include="MemAnalyzerBase.cs" />
@@ -105,8 +105,10 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="OutputStringWriter.cs" />
     <Compile Include="StringStatisticsCommand.cs" />
+    <Compile Include="TargetInformation.cs" />
     <Compile Include="TypeDiffStatistics.cs" />
     <Compile Include="TypeInstance.cs" />
+    <Compile Include="DisplayUnit.cs" />
     <Compile Include="VMMapData.cs" />
     <Compile Include="VMMap.cs" />
   </ItemGroup>

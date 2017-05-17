@@ -11,29 +11,40 @@ namespace MemAnalyzer
 {
     class Program
     {
+        /// <summary>
+        /// By default the first TopN types are printed.
+        /// </summary>
         static int TopN = 20;
+
+        /// <summary>
+        /// Path to public OneDrive which contains practically from all .NET versions all DAC dlls. 
+        /// </summary>
         const string DacCollection = "https://1drv.ms/f/s!AhcFq7XO98yJgoMwuPd7LNioVKAp_A";
 
         static string HelpStr = String.Format("MemAnalyzer {0} by Alois Kraus 2017", Assembly.GetExecutingAssembly().GetName().Version) + Environment.NewLine +
-                                "Usage: MemAnalyzer [ -f DumpFile or -pid ddd [ -f2 DumpFile or -pid2 ddd ] -dts [N] or -dtn [N] or -dstrings [N] [-live] ] [-gc xxx [-process xxx.exe]] [-o Output.csv [-sep \t]]" + Environment.NewLine +
+                                "Usage: MemAnalyzer [ -f DumpFile or -pid ddd [ -f2 DumpFile or -pid2 ddd ] -dts [N] or -dtn [N] or -dstrings [N] [-live] [-unit DisplayUnit] [-vmmap] ] [-gc xxx [-process xxx.exe] ] [-o Output.csv [-sep \t]] [-dump pidOrExe [outputDumpFileOrDir]] " + Environment.NewLine +
                                 "       -f fileName          Dump file to analyze." + Environment.NewLine +
                                 "       -f2 fileName         Diff Dump files" + Environment.NewLine +
                                 "       -pid ddd             Live process to analyze." + Environment.NewLine +
                                 "       -pid2 ddd            Live process to diff. You can combined it to e.g. compare a live process with a dump. Subtraction is done -xxx2 - xxxx where xxx is Pid or f" + Environment.NewLine +
+                                "       -vmmap               Fetch from live processes VMMAP data. VMMap.exe must be in the path to work." + Environment.NewLine +
                                $"       -dts N               Dump top N types by object size. Default for N is {TopN}." + Environment.NewLine +
                                $"       -dtn N               Dump top N types by object count. Default for N is {TopN}." + Environment.NewLine +
                                $"       -dstrings N          Dump top N duplicate strings and global statistics. Default for N is {TopN}." + Environment.NewLine +
+                                "       -unit DisplayUnit    DisplayUnit can be Bytes, KB, MB or GB" + Environment.NewLine +
                                 "       -live                If present only reachable (live) objects are considered in the statistics. Takes longer to calculate." + Environment.NewLine +
                                 "       -dacdir dir          If the dump file is from a machine with a different version you can tell MemAnalyzer in which directory to search for matching dac dlls." + Environment.NewLine +
                                $"                            See {DacCollection} for a collection of dac dlls from .NET 2.0 up to 4.7." + Environment.NewLine +
-                                "       -gc xxx              Force GC in process with id or if xxx is not a number it is treated as a command line substring filter." + Environment.NewLine +
-                                "       -process xxx.exe     (optional) Name of executable in which a GC should happen. Must contain .exe in its name." + Environment.NewLine +
+                                "       -procdump args       Create a memory dump and VMMap snapshot of a process. Needs procdump.exe and vmmap.exe in the path to work." + Environment.NewLine + 
                                 "       -o output.csv        Write output to csv file instead of console" + Environment.NewLine +
+                                " Return Value: If -dts/dtn is used it will return the allocated managed memory in KB." + Environment.NewLine +
+                                "               If additionally -vmmap is present it will return allocated Managed Heap + Heap + Private + Shareable + File Mappings." + Environment.NewLine +
+                                "               That enables leak detection during automated tests which can then e.g. enable allocation profiling on demand." + Environment.NewLine  +
                                 "Examples" + Environment.NewLine +
                                 "Dump types by size from dump file." + Environment.NewLine +
                                 "\tMemAnalyzer -f xx.dmp -dts" + Environment.NewLine +
                                 "Dump types by object count from a running process with process id ddd." + Environment.NewLine +
-                                "\tMemAnalyzer -pid ddd -dts" + Environment.NewLine +
+                                "\tMemAnalyzer -pid ddd -dtn" + Environment.NewLine +
                                 "Diff two memory dump files where (f2 - f) are calculated." + Environment.NewLine +
                                 "\tMemAnalyzer -f dump1.dmp -f2 dump2.dmp -dts" + Environment.NewLine +
                                 "Dump string duplicates of live process and write it to CSV file" + Environment.NewLine +
@@ -47,31 +58,46 @@ namespace MemAnalyzer
 
         private string[] Args;
 
+        string[] ProcDumpArgs = null;
+
         static bool ShowHelpMessage = true;
 
-        string DumpFile = null;
-        string DumpFile2 { get; set; }
-        int Pid2 { get; set; }
+        /// <summary>
+        /// Contains PID/Dump File name which are currently looking into
+        /// </summary>
+        TargetInformation TargetInformation = new TargetInformation();
+
         public bool LiveOnly { get; private set; }
+
+        /// <summary>
+        /// If set the output will written to a CSV file.
+        /// </summary>
         public string OutFile { get; private set; }
+
+        /// <summary>
+        /// When true fetch from live processes VMMap information if VMMap is in the path.
+        /// </summary>
+        bool GetVMMapData { get; set; }
 
         DataTarget Target = null;
         DataTarget Target2 = null;
 
         public static bool IsDebug = false;
         bool IsChild = false;
-        int Pid = 0;
-        string DacDll = null;
-        string CmdLineFilter = null;
+
+        string DacDir = null;
         string ProcessNameFilter = null;
         Actions Action = Actions.None;
+
+        DisplayUnit DisplayUnit = DisplayUnit.Bytes;
+
+        static int ReturnCode = 0;
 
         public Program(string[] args)
         {
             this.Args = args;
         }
 
-        static int ReturnCode = 0;
 
         static int Main(string[] args)
         {
@@ -90,6 +116,7 @@ namespace MemAnalyzer
                 Help("Got Exception: {0}", ex);
             }
 
+            DebugPrinter.Write($"Returning value {ReturnCode} as exit code.");
             return ReturnCode;
         }
 
@@ -104,9 +131,6 @@ namespace MemAnalyzer
                 Console.WriteLine(msg, args);
             }
         }
-
-
-
 
         private bool Parse()
         {
@@ -127,20 +151,40 @@ namespace MemAnalyzer
                     {
                         case "-f":
                             SetDefaultActionIfNotSet();
-                            DumpFile = NotAnArg(args.Dequeue());
+                            TargetInformation.DumpFileName1 = NotAnArg(args.Dequeue());
                             break;
                         case "-f2":
-                            DumpFile2 = NotAnArg(args.Dequeue());
+                            TargetInformation.DumpFileName2 = NotAnArg(args.Dequeue());
                             break;
                         case "-pid":
                             SetDefaultActionIfNotSet();
-                            Pid = int.Parse(NotAnArg(args.Dequeue()));
+                            TargetInformation.Pid1 = int.Parse(NotAnArg(args.Dequeue()));
                             break;
                         case "-child":
                             IsChild = true;
                             break;
                         case "-pid2":
-                            Pid2 = int.Parse(NotAnArg(args.Dequeue()));
+                            TargetInformation.Pid2 = int.Parse(NotAnArg(args.Dequeue()));
+                            break;
+                        case "-unit":
+                            string next = args.Dequeue();
+                            if ( Enum.TryParse(NotAnArg(next), true, out DisplayUnit tmpUnit) )
+                            {
+                                DisplayUnit = tmpUnit;
+                            }
+                            else
+                            {
+                                Console.WriteLine($"Warning: DisplayUnit {next} is not a valid value. Using default: {DisplayUnit}");
+                            }
+                            break;
+                        case "-vmmap":
+                            GetVMMapData = true;
+                            break;
+                        case "-procdump":
+                            Action = Actions.ProcDump;
+                            // give remaining args to procdump and to not try to parse them by ourself
+                            ProcDumpArgs = args.ToArray();
+                            args.Clear();
                             break;
                         case "-debug":
                             IsDebug = true;
@@ -157,11 +201,6 @@ namespace MemAnalyzer
                             {
                                 OutputStringWriter.SeparatorChar = sep[0];
                             }
-                            break;
-                        case "-gc":
-                            Action = Actions.ForceGC;
-                            CmdLineFilter = args.Dequeue();
-                            CmdLineFilter = int.TryParse(CmdLineFilter, out Pid) ? null : CmdLineFilter;
                             break;
                         case "-dts":
                             Action = Actions.DumpTypesBySize;
@@ -181,9 +220,9 @@ namespace MemAnalyzer
                             LiveOnly = true;
                             break;
                         case "-dacdir":
-                            DacDll = NotAnArg(args.Dequeue());
+                            DacDir = NotAnArg(args.Dequeue());
                             // quoted mscordacwks file paths are not correctly treated so far. 
-                            Environment.SetEnvironmentVariable("_NT_SYMBOL_PATH", DacDll.Trim(new char[] { '"' }));
+                            Environment.SetEnvironmentVariable("_NT_SYMBOL_PATH", DacDir.Trim(new char[] { '"' }));
                             break;
                         case "-process":
                             ProcessNameFilter = NotAnArg(args.Dequeue());
@@ -250,17 +289,25 @@ namespace MemAnalyzer
                         Help("No command specified.");
                         break;
                     case Actions.DumpTypesByCount:
-                        (analyzer as MemAnalyzer)?.DumpTypes(TopN, false);
+                        int ?allocatedKB  = (analyzer as MemAnalyzer)?.DumpTypes(TopN, false);
+                        if (allocatedKB != null)
+                        {
+                            ReturnCode = allocatedKB.Value;
+                        }
                         break;
                     case Actions.DumpTypesBySize:
-                        (analyzer as MemAnalyzer)?.DumpTypes(TopN, true);
-                        break;
-                    case Actions.ForceGC:
-                        ForceGCCommand cmd = new ForceGCCommand(ProcessNameFilter, CmdLineFilter, Pid);
-                        cmd.ForceGC();
+                        allocatedKB  = (analyzer as MemAnalyzer)?.DumpTypes(TopN, true);
+                        if( allocatedKB != null )
+                        {
+                            ReturnCode = allocatedKB.Value;
+                        }
                         break;
                     case Actions.DumpStrings:
                         (analyzer as StringStatisticsCommand)?.Execute(TopN);
+                        break;
+                    case Actions.ProcDump:
+                        DumpCreator dumper = new DumpCreator(IsDebug);
+                        dumper.Dump(ProcDumpArgs);
                         break;
                     default:
                         throw new NotSupportedException(String.Format("Command {0} is not recognized as a valid command", this.Action));
@@ -304,19 +351,25 @@ namespace MemAnalyzer
                 runtime = clrVersion.CreateRuntime();
                 return runtime.GetHeap();
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                Console.WriteLine("Error: Is the dump file opened by another process (debugger)? If yes close the debugger first.");
-                Console.WriteLine("       If the dump comes from a different computer with another CLR version {0} that you are running on your machine you need to download the matching mscordacwks.dll first. Check out " + DacCollection + " and download the matching version/s.", clrVersion.Version);
-                Console.WriteLine("       Then set _NT_SYMBOL_PATH=PathToYourDownloadedMscordackwks.dll  e.g. _NT_SYMBOL_PATH=c:\\temp\\mscordacwks in the shell where you did execute MemAnalyzer and then try again.");
-                Console.WriteLine();
+                DebugPrinter.Write("Got from CreateRuntime or GetHeap: {0}", ex);
+
+                // If it is a target architecture mismatch hide error message and start x64 to try again later.
+                if( Environment.Is64BitProcess )
+                {
+                    Console.WriteLine("Error: Is the dump file opened by another process (debugger)? If yes close the debugger first.");
+                    Console.WriteLine("       If the dump comes from a different computer with another CLR version {0} that you are running on your machine you need to download the matching mscordacwks.dll first. Check out " + DacCollection + " and download the matching version/s.", clrVersion.Version);
+                    Console.WriteLine("       Then set _NT_SYMBOL_PATH=PathToYourDownloadedMscordackwks.dll  e.g. _NT_SYMBOL_PATH=c:\\temp\\mscordacwks in the shell where you did execute MemAnalyzer and then try again.");
+                    Console.WriteLine();
+                }
                 throw;
             }
         }
 
         private void RestartWithx64()
         {
-            if( IntPtr.Size == 8)
+            if( Environment.Is64BitProcess)
             {
                 return;
             }
@@ -367,6 +420,8 @@ namespace MemAnalyzer
                 Console.WriteLine(output);
             }
             p.WaitForExit();
+            DebugPrinter.Write($"Setting return code from x64 process {p.ExitCode} to our own return code.");
+            ReturnCode = p.ExitCode;
         }
 
         MemAnalyzerBase CreateAnalyzer(Actions action)
@@ -376,65 +431,68 @@ namespace MemAnalyzer
 
             try
             {
-                if (this.DumpFile != null)
+                if (TargetInformation.DumpFileName1 != null)
                 {
-                    Target = DataTarget.LoadCrashDump(DumpFile, CrashDumpReader.ClrMD);
+                    // If only one dump file is opened then we can open the file with the debugger interface which only supports
+                    // one reader in one process. This is useful because otherwise we will lock the file and ClrMD will error 
+                    // out if the dump file already open within a debugger which is pretty common.
+                    Target = DataTarget.LoadCrashDump(TargetInformation.DumpFileName1, TargetInformation.DumpFileName2 == null ? CrashDumpReader.DbgEng : CrashDumpReader.ClrMD);
                     heap = GetHeap(Target);
                 }
-                if (this.DumpFile2 != null)
+                if (TargetInformation.DumpFileName2 != null)
                 {
-                    Target2 = DataTarget.LoadCrashDump(DumpFile2, CrashDumpReader.ClrMD);
+                    Target2 = DataTarget.LoadCrashDump(TargetInformation.DumpFileName2, CrashDumpReader.ClrMD);
                     heap2 = GetHeap(Target2);
                 }
 
-                if (Pid != 0 && Target == null)
+                if (TargetInformation.Pid1 != 0 && Target == null)
                 {
-                    if( !NativeMethods.ProcessExists(Pid) )
+                    if( !NativeMethods.ProcessExists(TargetInformation.Pid1) )
                     {
-                        Console.WriteLine($"Error: Process {Pid} is not running.");
+                        Console.WriteLine($"Error: Process {TargetInformation.Pid1} is not running.");
                         return null;
                     }
 
                     // do not try wrong bitness when we know it will fail anyway
-                    if ( NativeMethods.IsWin64(Pid) && IntPtr.Size == 4) 
+                    if ( NativeMethods.IsWin64(TargetInformation.Pid1) && !Environment.Is64BitProcess) 
                     {
-                        DebugPrinter.Write($"Starting x64 because Pid {Pid} is Win64 process");
+                        DebugPrinter.Write($"Starting x64 because Pid {TargetInformation.Pid1} is Win64 process");
                         RestartWithx64();
                         return null;
                     }
 
-                    Target = DataTarget.AttachToProcess(Pid, 5000u);
+                    Target = DataTarget.AttachToProcess(TargetInformation.Pid1, 5000u);
                     heap = GetHeap(Target);
                     if (heap == null)
                     {
-                        Console.WriteLine($"Error: Could not get managed heap of process {Pid}. Most probably it is an unmanaged process.");
+                        Console.WriteLine($"Error: Could not get managed heap of process {TargetInformation.Pid1}. Most probably it is an unmanaged process.");
                     }
                 }
 
-                if (Pid2 != 0 & Target2 == null)
+                if (TargetInformation.Pid2 != 0 & Target2 == null)
                 {
-                    if (!NativeMethods.ProcessExists(Pid2))
+                    if (!NativeMethods.ProcessExists(TargetInformation.Pid2))
                     {
-                        Console.WriteLine($"Error: Process {Pid2} is not running.");
+                        Console.WriteLine($"Error: Process {TargetInformation.Pid2} is not running.");
                         return null;
                     }
 
                     // Cannot load data from processes with different bitness
-                    if(Pid != 0 && (NativeMethods.IsWin64(Pid) != NativeMethods.IsWin64(Pid2) ) )
+                    if(TargetInformation.Pid1 != 0 && (NativeMethods.IsWin64(TargetInformation.Pid1) != NativeMethods.IsWin64(TargetInformation.Pid2) ) )
                     {
-                        Console.WriteLine($"Error: Process {Pid} and {Pid2} are of different bitness. You can dump each one separately to CSV files and compare the CSV files instead.");
+                        Console.WriteLine($"Error: Process {TargetInformation.Pid1} and {TargetInformation.Pid2} are of different bitness. You can dump each one separately to CSV files and compare the CSV files instead.");
                         return null;
                     }
 
                     // do not try wrong bitness when we know it will fail anyway
-                    if ( NativeMethods.IsWin64(Pid2) && IntPtr.Size == 4 )
+                    if ( NativeMethods.IsWin64(TargetInformation.Pid2) && !Environment.Is64BitProcess)
                     {
-                        DebugPrinter.Write($"Starting x64 because Pid2 {Pid2} is Win64 process");
+                        DebugPrinter.Write($"Starting x64 because Pid2 {TargetInformation.Pid2} is Win64 process");
                         RestartWithx64();
                         return null;
                     }
 
-                    Target2 = DataTarget.AttachToProcess(Pid2, 5000u);
+                    Target2 = DataTarget.AttachToProcess(TargetInformation.Pid2, 5000u);
                     heap2 = GetHeap(Target2);
                 }
             }
@@ -442,8 +500,8 @@ namespace MemAnalyzer
             {
                 // Default is a 32 bit process if runtime creation fails with InvalidOperationException or a DAC location failure
                 // we try x64 as fall back. This will work if the bitness of the dump file is wrong.
-                if(IntPtr.Size == 4 && (ex is FileNotFoundException || ex is InvalidOperationException || ex is ClrDiagnosticsException ||
-                                       (ex is COMException && ex.HResult == HResultNotEnoughStorage)) ) 
+                if(!Environment.Is64BitProcess && (ex is FileNotFoundException || ex is InvalidOperationException || ex is ClrDiagnosticsException ||
+                                                  (ex is COMException && ex.HResult == HResultNotEnoughStorage)) ) 
                 {
                     RestartWithx64();
                 }
@@ -459,11 +517,9 @@ namespace MemAnalyzer
                 {
                     case Actions.DumpTypesByCount:
                     case Actions.DumpTypesBySize:
-                        return new MemAnalyzer(heap, heap2, LiveOnly);
+                        return new MemAnalyzer(heap, heap2, LiveOnly, GetVMMapData, TargetInformation, DisplayUnit);
                     case Actions.DumpStrings:
-                        return new StringStatisticsCommand(heap, heap2, LiveOnly);
-                    case Actions.ForceGC:
-                        return null;
+                        return new StringStatisticsCommand(heap, heap2, LiveOnly, DisplayUnit);
                     case Actions.None:
                         return null;
                     default:
@@ -506,8 +562,8 @@ namespace MemAnalyzer
             None = 0,
             DumpTypesByCount,
             DumpTypesBySize,
-            ForceGC,
             DumpStrings,
+            ProcDump,
         }
     }
 }

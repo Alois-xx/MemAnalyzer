@@ -14,13 +14,14 @@ namespace MemAnalyzer
     /// </summary>
     class StringStatisticsCommand : MemAnalyzerBase
     {
+
         /// <summary>
         /// Init String Statistics
         /// </summary>
         /// <param name="heap">First Heap</param>
         /// <param name="heap2">Second Heap</param>
         /// <param name="bLiveOnly">If true only consider reachable objects. Otherwise temporary not yet allocated objects are also counted. This is faster but less accurate.</param>
-        public StringStatisticsCommand(ClrHeap heap, ClrHeap heap2, bool bLiveOnly):base(heap, heap2, bLiveOnly)
+        public StringStatisticsCommand(ClrHeap heap, ClrHeap heap2, bool bLiveOnly, DisplayUnit displayUnit):base(heap, heap2, bLiveOnly, displayUnit)
         {
         }
 
@@ -87,11 +88,11 @@ namespace MemAnalyzer
                 if (topN > 0)
                 {
                     var sorted = res.Result.StringCounts.OrderByDescending(kvp => kvp.Value.InstanceCount).Take(topN);
-                    OutputStringWriter.FormatAndWrite("{0}\t{1}\t{2}", "Strings(Count)", "Waste(Bytes)", "String");
+                    OutputStringWriter.FormatAndWrite("{0}\t{1}\t{2}", "Strings(Count)", $"Waste({DisplayUnit})", "String");
                     string fmt = "{0,-12}\t{1,-11:N0}\t{2}";
                     foreach (var kvp in sorted)
                     {
-                        OutputStringWriter.FormatAndWrite(fmt, kvp.Value.InstanceCount, (kvp.Value.InstanceCount-1L) * kvp.Value.SizePerInstance, GetShortString(kvp.Key));
+                        OutputStringWriter.FormatAndWrite(fmt, kvp.Value.InstanceCount, ((kvp.Value.InstanceCount-1L) * kvp.Value.SizePerInstance)/(long) DisplayUnit, GetShortString(kvp.Key));
                     }
                 }
 
@@ -101,8 +102,8 @@ namespace MemAnalyzer
                     Console.WriteLine("Summary");
                     Console.WriteLine("==========================================");
                     Console.WriteLine($"Strings                 {res.Result.StringObjectCount,12:N0} count");
-                    Console.WriteLine($"Allocated Size          {res.Result.StringsAllocatedInBytes,12:N0} bytes");
-                    Console.WriteLine($"Waste Duplicate Strings {res.Result.StringWasteInBytes,12:N0} bytes");
+                    Console.WriteLine($"Allocated Size          {res.Result.StringsAllocatedInBytes/(long)DisplayUnit,12:N0} {DisplayUnit}");
+                    Console.WriteLine($"Waste Duplicate Strings {res.Result.StringWasteInBytes/(long)DisplayUnit,12:N0} {DisplayUnit}");
                 }
             }
         }
@@ -134,18 +135,20 @@ namespace MemAnalyzer
             var sortedDiffs = diffs.OrderByDescending(x => Math.Abs(x.DiffInBytes)).ToArray();
             Console.WriteLine("String Allocation Diff Statistics");
             string fmtString = "{0,-12:N0}\t{1,17:N0}\t{2,-11:N0}\t{3,-11:N0}\t{4,-17:N0}\t{5,-18:N0}\t{6}";
-            OutputStringWriter.FormatAndWrite(fmtString, "Delta(Bytes)", "Delta(Instances)", "Instances", "Instances2", "Allocated(Bytes)", "Allocated2(Bytes)", "Value");
+            OutputStringWriter.FormatAndWrite(fmtString, $"Delta({DisplayUnit})", "Delta(Instances)", "Instances", "Instances2", $"Allocated({DisplayUnit})", $"Allocated2({DisplayUnit})", "Value");
 
+            long displayUnitDiv = (long) DisplayUnit;
             foreach(var diff in sortedDiffs)
             {
-                OutputStringWriter.FormatAndWrite(fmtString, diff.DiffInBytes, diff.InstanceDiffCount, diff?.Stat?.InstanceCount, diff?.Stat2?.InstanceCount, diff?.Stat?.AllocatedInBytes, diff?.Stat2?.AllocatedInBytes, GetShortString(diff.Value));
+                OutputStringWriter.FormatAndWrite(fmtString, diff.DiffInBytes/ displayUnitDiv, diff.InstanceDiffCount, diff?.Stat?.InstanceCount, diff?.Stat2?.InstanceCount, diff?.Stat?.AllocatedInBytes/displayUnitDiv, diff?.Stat2?.AllocatedInBytes/displayUnitDiv, GetShortString(diff.Value));
             }
 
             var deltaCount = res2.StringObjectCount - res.StringObjectCount;
             var deltaWaste = res2.StringWasteInBytes - res.StringWasteInBytes;
             var deltaBytes = res2.StringsAllocatedInBytes - res.StringsAllocatedInBytes;
 
-            OutputStringWriter.FormatAndWrite(fmtString, deltaBytes, deltaCount, res.StringObjectCount, res2.StringObjectCount, res.StringsAllocatedInBytes, res2.StringsAllocatedInBytes, "");
+            OutputStringWriter.FormatAndWrite(fmtString, deltaBytes/displayUnitDiv, deltaCount, res.StringObjectCount, res2.StringObjectCount, 
+                res.StringsAllocatedInBytes/ displayUnitDiv, res2.StringsAllocatedInBytes/ displayUnitDiv, "Strings(Total)");
         }
 
         class StringAnalysisResult

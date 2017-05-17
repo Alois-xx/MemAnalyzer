@@ -15,8 +15,10 @@ namespace MemAnalyzer
         protected ClrHeap Heap;
         protected ClrHeap Heap2;
         protected bool LiveOnly;
+        protected DisplayUnit DisplayUnit;
 
-        public MemAnalyzerBase(ClrHeap heap, ClrHeap heap2, bool liveOnly)
+
+        public MemAnalyzerBase(ClrHeap heap, ClrHeap heap2, bool liveOnly, DisplayUnit displayUnit)
         {
             if( heap == null )
             {
@@ -25,6 +27,7 @@ namespace MemAnalyzer
             Heap = heap;
             Heap2 = heap2;
             LiveOnly = liveOnly;
+            DisplayUnit = displayUnit;
         }
 
         protected static IEnumerable<ulong> GetObjectAddresses(ClrHeap heap, bool bLiveOnly)

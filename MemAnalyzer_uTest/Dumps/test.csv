@@ -1,0 +1,22 @@
+Delta(KB)	Delta(Instances)	Instances	Instances2	Allocated(KB)	Allocated2(KB)	Value
+0	-20	20		0		String 49928
+0	-20	20		0		String 49929
+0	-20	20		0		String 49930
+0	-20	20		0		String 49931
+0	-20	20		0		String 49932
+0	-20	20		0		String 49933
+0	-20	20		0		String 49934
+0	-20	20		0		String 49935
+0	-20	20		0		String 49936
+0	-20	20		0		String 49937
+0	2		2		0	C:\Source\git\MemAnalyzer\MemAnalyzer_uTest\String...
+0	6		6		0	en-US
+0	5		5		0	de-DE
+0	5		5		0	0
+0	3		3		0	.
+0	3		3		0	,
+0	3		3		0	2
+0	3		3		0	3
+0	2		2		0	1
+0	2		2		0	-
+-18550	-507050	507248	198	18556	6	Total
