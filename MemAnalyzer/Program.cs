@@ -22,7 +22,7 @@ namespace MemAnalyzer
         const string DacCollection = "https://1drv.ms/f/s!AhcFq7XO98yJgoMwuPd7LNioVKAp_A";
 
         static string HelpStr = String.Format("MemAnalyzer {0} by Alois Kraus 2017", Assembly.GetExecutingAssembly().GetName().Version) + Environment.NewLine +
-                                "Usage: MemAnalyzer [ -f DumpFile or -pid ddd [ -f2 DumpFile or -pid2 ddd ] -dts [N] or -dtn [N] or -dstrings [N] [-live] [-unit DisplayUnit] [-vmmap] ] [-gc xxx [-process xxx.exe] ] [-o Output.csv [-sep \t]] [-dump pidOrExe [outputDumpFileOrDir]] " + Environment.NewLine +
+                                "Usage: MemAnalyzer [ -f DumpFile or -pid ddd [ -f2 DumpFile or -pid2 ddd ] -dts [N] or -dtn [N] or -dstrings [N] [-live] [-unit DisplayUnit] [-vmmap] ] [-gc xxx [-process xxx.exe] ] [-o Output.csv [-sep \t]] [[-verifydump] -procdump pidOrExe [outputDumpFileOrDir]] " + Environment.NewLine +
                                 "       -f fileName          Dump file to analyze." + Environment.NewLine +
                                 "       -f2 fileName         Diff Dump files" + Environment.NewLine +
                                 "       -pid ddd             Live process to analyze." + Environment.NewLine +
@@ -31,11 +31,13 @@ namespace MemAnalyzer
                                $"       -dts N               Dump top N types by object size. Default for N is {TopN}." + Environment.NewLine +
                                $"       -dtn N               Dump top N types by object count. Default for N is {TopN}." + Environment.NewLine +
                                $"       -dstrings N          Dump top N duplicate strings and global statistics. Default for N is {TopN}." + Environment.NewLine +
+                                "         -showAddress       Show the address of one string of a given value" + Environment.NewLine +
                                 "       -unit DisplayUnit    DisplayUnit can be Bytes, KB, MB or GB" + Environment.NewLine +
                                 "       -live                If present only reachable (live) objects are considered in the statistics. Takes longer to calculate." + Environment.NewLine +
                                 "       -dacdir dir          If the dump file is from a machine with a different version you can tell MemAnalyzer in which directory to search for matching dac dlls." + Environment.NewLine +
                                $"                            See {DacCollection} for a collection of dac dlls from .NET 2.0 up to 4.7." + Environment.NewLine +
-                                "       -procdump args       Create a memory dump and VMMap snapshot of a process. Needs procdump.exe and vmmap.exe in the path to work." + Environment.NewLine + 
+                                "       -procdump args       Create a memory dump and VMMap snapshot of a process. Needs procdump.exe and vmmap.exe in the path to work." + Environment.NewLine +
+                                "       -verifydump          Used with -procdump. This checks the managed heap for consistency to be sure that it can be loaded later" + Environment.NewLine +
                                 "       -o output.csv        Write output to csv file instead of console" + Environment.NewLine +
                                 " Return Value: If -dts/dtn is used it will return the allocated managed memory in KB." + Environment.NewLine +
                                 "               If additionally -vmmap is present it will return allocated Managed Heap + Heap + Private + Shareable + File Mappings." + Environment.NewLine +
@@ -59,6 +61,12 @@ namespace MemAnalyzer
         private string[] Args;
 
         string[] ProcDumpArgs = null;
+
+        /// <summary>
+        /// If true the dump file written with ProcDump is tried to load into MemAnalyzer to check if the heap 
+        /// is in a valid state.
+        /// </summary>
+        bool VerifyDump = false;
 
         static bool ShowHelpMessage = true;
 
@@ -84,6 +92,7 @@ namespace MemAnalyzer
 
         public static bool IsDebug = false;
         bool IsChild = false;
+        bool ShowAddress = false;
 
         string DacDir = null;
         string ProcessNameFilter = null;
@@ -186,6 +195,9 @@ namespace MemAnalyzer
                             ProcDumpArgs = args.ToArray();
                             args.Clear();
                             break;
+                        case "-verifydump":
+                            VerifyDump = true;
+                            break;
                         case "-debug":
                             IsDebug = true;
                             break;
@@ -233,6 +245,9 @@ namespace MemAnalyzer
                             {
                                 TopN = int.Parse(args.Dequeue());
                             }
+                            break;
+                        case "-showaddress":
+                            ShowAddress = true;
                             break;
                         case "-o":
                             OutFile = NotAnArg(args.Dequeue());
@@ -305,10 +320,10 @@ namespace MemAnalyzer
                         }
                         break;
                     case Actions.DumpStrings:
-                        (analyzer as StringStatisticsCommand)?.Execute(TopN);
+                        (analyzer as StringStatisticsCommand)?.Execute(TopN, ShowAddress);
                         break;
                     case Actions.ProcDump:
-                        DumpCreator dumper = new DumpCreator(IsDebug);
+                        DumpCreator dumper = new DumpCreator(IsDebug, VerifyDump);
                         dumper.Dump(ProcDumpArgs);
                         break;
                     default:
@@ -406,7 +421,7 @@ namespace MemAnalyzer
             // if -debug is specified do not deploy the exe into AppData. Instead start it from the location where where the main exe is located
             if( !IsDebug )
             {
-                string appDir = Environment.ExpandEnvironmentVariables($"%AppData%\\MemAnalyzer\\{Assembly.GetExecutingAssembly().GetName().Version}");
+                string appDir = GetToolDeployDirectory();
                 Directory.CreateDirectory(appDir);
                 exe = Path.Combine(appDir, "MemAnalyzerx64.exe");
             }
@@ -437,24 +452,33 @@ namespace MemAnalyzer
             ReturnCode = p.ExitCode;
         }
 
+        internal static string GetToolDeployDirectory()
+        {
+            return Environment.ExpandEnvironmentVariables($"%AppData%\\MemAnalyzer\\{Assembly.GetExecutingAssembly().GetName().Version}");
+        }
+
         MemAnalyzerBase CreateAnalyzer(Actions action)
         {
             ClrHeap heap = null;
             ClrHeap heap2 = null;
 
+            // If only one dump file is opened then we can open the file with the debugger interface which only supports
+            // one reader in one process. This is useful because otherwise we will lock the file and ClrMD will error 
+            // out if the dump file already open within a debugger which is pretty common.
+            // But the drawback is that if we compare a live process against a memory dump it will fail and we get 
+            // always a diff of 0 back!
+            var crashDumpOpenMode = TargetInformation.IsProcessCompare ? CrashDumpReader.ClrMD : CrashDumpReader.DbgEng;
+
             try
             {
                 if (TargetInformation.DumpFileName1 != null)
                 {
-                    // If only one dump file is opened then we can open the file with the debugger interface which only supports
-                    // one reader in one process. This is useful because otherwise we will lock the file and ClrMD will error 
-                    // out if the dump file already open within a debugger which is pretty common.
-                    Target = DataTarget.LoadCrashDump(TargetInformation.DumpFileName1, TargetInformation.DumpFileName2 == null ? CrashDumpReader.DbgEng : CrashDumpReader.ClrMD);
+                    Target = DataTarget.LoadCrashDump(TargetInformation.DumpFileName1, crashDumpOpenMode);
                     heap = GetHeap(Target);
                 }
                 if (TargetInformation.DumpFileName2 != null)
                 {
-                    Target2 = DataTarget.LoadCrashDump(TargetInformation.DumpFileName2, CrashDumpReader.ClrMD);
+                    Target2 = DataTarget.LoadCrashDump(TargetInformation.DumpFileName2, crashDumpOpenMode);
                     heap2 = GetHeap(Target2);
                 }
 

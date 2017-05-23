@@ -98,6 +98,7 @@ namespace MemAnalyzer
     {
         public long InstanceCount;
         public long SizePerInstance;
+        public ulong SampleAddress;
 
         public long AllocatedInBytes
         {

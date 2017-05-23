@@ -43,7 +43,7 @@ namespace MemAnalyzer
                     else
                     {
                         var size = type.GetSize(instance);
-                        stringUsages[value] = new ObjectStatistics { SizePerInstance = (long) size, InstanceCount = 1 };
+                        stringUsages[value] = new ObjectStatistics { SizePerInstance = (long) size, InstanceCount = 1, SampleAddress = instance };
                     }
                 }
             }
@@ -75,7 +75,7 @@ namespace MemAnalyzer
 
             return str.Replace(Environment.NewLine, "");
         }
-        public void Execute(int topN)
+        public void Execute(int topN, bool bShowAddress)
         {
             Task<StringAnalysisResult> res = Task.Factory.StartNew<StringAnalysisResult>(() => Analyze(Heap, LiveOnly));
             if (Heap2 != null)
@@ -92,7 +92,8 @@ namespace MemAnalyzer
                     string fmt = "{0,-12}\t{1,-11:N0}\t{2}";
                     foreach (var kvp in sorted)
                     {
-                        OutputStringWriter.FormatAndWrite(fmt, kvp.Value.InstanceCount, ((kvp.Value.InstanceCount-1L) * kvp.Value.SizePerInstance)/(long) DisplayUnit, GetShortString(kvp.Key));
+                        string addressString = bShowAddress ? " 0x"+ kvp.Value.SampleAddress.ToString("X") : "";
+                        OutputStringWriter.FormatAndWrite(fmt, kvp.Value.InstanceCount, ((kvp.Value.InstanceCount - 1L) * kvp.Value.SizePerInstance) / (long)DisplayUnit, GetShortString(kvp.Key) + addressString);
                     }
                 }
 

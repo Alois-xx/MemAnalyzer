@@ -13,7 +13,7 @@ namespace MemAnalyzer_uTest
     [TestClass]
     public class DumpCreatorTests
     {
-        string exe = "StringAllocator.exe";
+        const string StringAllocExe = "StringAllocatorx86.exe";
         string dumpFileName = "test.dmp";
 
         [TestInitialize]
@@ -36,7 +36,7 @@ namespace MemAnalyzer_uTest
         [TestMethod]
         public void Can_Dump_Process()
         {
-            DumpCreator creator = new DumpCreator(true);
+            DumpCreator creator = new DumpCreator(true,false);
             var process = AllocStrings();
 
             string file = creator.Dump(new string[] { process.Id.ToString(), "test.dmp" });
@@ -99,7 +99,7 @@ namespace MemAnalyzer_uTest
         }
 
 
-        Process AllocStrings(int n=0)
+        internal static Process AllocStrings(string exe= StringAllocExe, int n=0)
         {
             ProcessStartInfo info = new ProcessStartInfo(exe, $"{n}")
             {

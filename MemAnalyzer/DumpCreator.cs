@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -16,10 +17,12 @@ namespace MemAnalyzer
     {
         const string ProcDumpExe = "procdump.exe";
         bool ShowOutput = false;
+        bool VerifyDump = false;
 
-        public DumpCreator(bool showOutput)
+        public DumpCreator(bool showOutput, bool verifyDump)
         {
             ShowOutput = showOutput;
+            VerifyDump = verifyDump;
         }
 
         /// <summary>
@@ -95,7 +98,31 @@ namespace MemAnalyzer
                 Console.WriteLine($"Error: Could not create find process id of dumped process {exeName}. No VMMap information is saved. ");
             }
 
+            if (VerifyDump && !CanLoadDump(dumpFileName))
+            {
+                Console.WriteLine($"Error: Dump file cannot be parsed with MemAnalyzer. Managed Heap might be in an inconsistent state.");
+                dumpFileName = null;
+            }
+
+
             return dumpFileName;
+        }
+
+        private bool CanLoadDump(string dumpFileName)
+        {
+            ProcessStartInfo info = new ProcessStartInfo(Assembly.GetEntryAssembly().Location, $"-f {dumpFileName} -vmmap")
+            {
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                CreateNoWindow = true,
+            };
+
+            var p = Process.Start(info);
+            Console.WriteLine("Verifying Dump if it is readable ...");
+            Console.WriteLine(p.StandardOutput.ReadToEnd());
+            DebugPrinter.Write($"Start child process {info.FileName} with args: {info.Arguments}");
+            p.WaitForExit();
+            return p.ExitCode > 0;
         }
 
         /// <summary>

@@ -198,6 +198,10 @@ namespace MemAnalyzer
                 string name = parts[0];
                 if (RowMapper.TryGetValue(parts[0], out Action<long, long, long, VMMapData> mapper))
                 {
+                    if( parts[1] == "") // Page table data can sometimes be empty
+                    {
+                        return;
+                    }
                     long reserved = long.Parse(parts[1]);
                     long.TryParse(parts[2], out long committed);
                     long.TryParse(parts[10], out long largestBlock);

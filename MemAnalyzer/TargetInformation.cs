@@ -32,6 +32,18 @@ namespace MemAnalyzer
         }
 
         /// <summary>
+        /// Return true if we have two processes to watch. One can be a memory dump or a live process.
+        /// </summary>
+        public bool IsProcessCompare
+        {
+            get
+            {
+                return (Pid1 != 0 || DumpFileName1 != null) &&
+                       (Pid2 != 0 || DumpFileName2 != null);
+            }
+        }
+
+        /// <summary>
         /// Get from dump file 2 the associated VMMap file which is of the format file.dmp -> file_VMMap.csv.
         /// If the file does not exist null is returned.
         /// </summary>
