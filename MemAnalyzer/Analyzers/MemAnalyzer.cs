@@ -1,6 +1,7 @@
 ﻿using Microsoft.Diagnostics.Runtime;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -18,6 +19,32 @@ namespace MemAnalyzer
 
         TargetInformation TargetInfo;
 
+        // Additional columns which are printed when CSV output is active
+        string ProcessName;
+        string CmdLine;
+        string TimeAndOrDate;
+        string Context;
+        bool IsFirstLine = true;
+
+
+        /// <summary>
+        /// Row names in output. Rows with a ! in their name are not aggregated values
+        /// which makes it easy to filter for them in Pivot Charts with ! as text filter
+        /// </summary>
+        const string Reserved_LargestFreeBlock = "Reserved_LargestFreeBlock";
+        const string Reserved_Stack = "Reserved_Stack";
+        const string Committed_Dll = "Committed_Dll";
+        const string Committed_Heap = "Committed_Heap!";
+        const string Committed_MappedFile = "Committed_MappedFile!";
+        const string Committed_Private = "Committed_Private!";
+        const string Committed_Shareable = "Committed_Shareable!";
+        const string Committed_Total = "Committed_Total";
+        const string ManagedHeapSize = "Managed Heap(TotalSize)";
+        const string ManagedHeapFree = "Managed Heap(Free)!";
+        const string ManagedHeapAllocated = "Managed Heap(Allocated)!";
+        const string AllocatedTotal = "Allocated(Total)";
+
+
         /// <summary>
         /// Construct a memory analyzer
         /// </summary>
@@ -26,11 +53,19 @@ namespace MemAnalyzer
         /// <param name="bLiveOnly">If true only rooted objects are considered. This takes longer to execute but is more accurate. Otherwise temp objects which have not yet been collected also show up.</param>
         /// <param name="bGetVMMapData">If true then from running processes the VMMap information is read.</param>
         /// <param name="info">Target process pid and/or dump files names.</param>
-        public MemAnalyzer(ClrHeap heap, ClrHeap heap2, bool bLiveOnly, bool bGetVMMapData, TargetInformation info, DisplayUnit displayunit=DisplayUnit.MB) :base(heap, heap2, bLiveOnly, displayunit)
+        /// <param name="displayunit">Units in which bytes should be displayed</param>
+        /// <param name="timeFormat">.NET Format string for time and date. If value is Invariant then the invariant culture is used to format.</param>
+        /// <param name="context">Optional context column which is printed to each output line when CSV output is enabled to e.g. dump the memory for test run nr 1, 2, 3, which gives nice metric in Excel later.</param>
+        public MemAnalyzer(ClrHeap heap, ClrHeap heap2, bool bLiveOnly, bool bGetVMMapData, TargetInformation info, DisplayUnit displayunit=DisplayUnit.MB, string timeFormat=null, string context = null) :base(heap, heap2, bLiveOnly, displayunit)
         {
             GetVMMapData = bGetVMMapData;
             TargetInfo = info;
-         }
+            ProcessName = TargetInfo.IsLiveProcess? TargetInformation.GetProcessName(TargetInfo.Pid1) : "";
+            CmdLine = TargetInfo.IsLiveProcess ? TargetInformation.GetProcessCmdLine(TargetInfo.Pid1) : "";
+            var now = DateTime.Now;
+            TimeAndOrDate = timeFormat == "Invariant" ? now.ToString(CultureInfo.InvariantCulture) : now.ToString(timeFormat);
+            Context = context;
+        }
 
         /// <summary>
         /// Dump types by size or by count.
@@ -40,7 +75,7 @@ namespace MemAnalyzer
         /// <returns>Allocated memory in KB if VMMap data is available. Otherwise only the allocated managed heap size in KB is returned.</returns>
         /// <remarks>The returned value is returned, if no other error has occurred from the Main method. That allows test automation to trigger e.g. a dump of 
         /// a leak was detected or to automatically enable memory profiling if the allocated memory reached a threshold.</remarks>
-        public int DumpTypes(int topN, bool orderBySize)
+        public int DumpTypes(int topN, bool orderBySize, int minCount)
         {
             var typeInfosTask = Task.Factory.StartNew( () => GetTypeStatistics(Heap, LiveOnly));
             int allocatedMemoryInKB = 0;
@@ -60,31 +95,71 @@ namespace MemAnalyzer
                 }
 
                 // Get allocated diff
-                allocatedMemoryInKB = PrintTypeStatisticsDiff(typeInfosTask.Result, typeInfos2, vmmap, vmmap2, topN, orderBySize);
+                allocatedMemoryInKB = PrintTypeStatisticsDiff(typeInfosTask.Result, typeInfos2, vmmap, vmmap2, topN, minCount, orderBySize);
             }
             else
             {
                 // get allocated memory
-                allocatedMemoryInKB = PrintTypeStatistics(topN, orderBySize, typeInfosTask);
+                allocatedMemoryInKB = PrintTypeStatistics(topN, minCount, orderBySize, typeInfosTask);
             }
 
             return allocatedMemoryInKB;
         }
 
         /// <summary>
-        /// Print type statistics.
+        /// Write one line of type statistics metric. This method adds extra columns for CSV output to see which process, cmd line and time 
+        /// the data was generated to make it possible to record data in append mode. 
+        /// </summary>
+        /// <param name="allocated">Allocated bytes</param>
+        /// <param name="instances">Allocates Intances</param>
+        /// <param name="type">Type name</param>
+        void WriteTypeStatisticsLine(long allocated, long instances, string type)
+        {
+            // Default format string for console output. 
+            // fmt is ignored for CSV output where all columns are simply \t separated. 
+            string fmt = "{0,-17:N0}\t{1,-17:N0}\t{2}";
+
+            if (IsFirstLine)
+            {
+                string[] header = new string[] { "Allocated" + DisplayUnit, "Instances(Count)", "Type" };
+
+                if (OutputStringWriter.CsvOutput)
+                {
+                    header = header.Concat(new string[] { "ProcessId", "Time", "CommandLine", "Age(s)", "Name", "Context" }).ToArray();
+                }
+
+                // write header
+                OutputStringWriter.FormatAndWriteHeader(fmt,header);
+                IsFirstLine = false;
+            }
+
+            if (OutputStringWriter.CsvOutput)
+            {
+                OutputStringWriter.FormatAndWrite(fmt, allocated, instances, type, TargetInfo.IsLiveProcess ? TargetInfo.Pid1.ToString() : "", TimeAndOrDate, CmdLine,  TargetInfo.ProcessAgeInSeconds, TargetInfo.ProcessName, Context);
+            }
+            else
+            {
+                OutputStringWriter.FormatAndWrite(fmt, allocated, instances == 0 ? "" : (object) instances, type);
+            }
+        }
+
+        /// <summary>
+        /// Print type statistics. If output is a CSV file time and process information are appended to allow subsequent writes into one big CSV file for long data series.
         /// </summary>
         /// <param name="topN"></param>
         /// <param name="orderBySize"></param>
         /// <param name="typeInfosTask"></param>
         /// <returns>Allocated memory in KB. If VMmap data is present the total allocated memory diff for allocated managed heap, heap, private, file mappings and sharable memory is returned.</returns>
-        private int PrintTypeStatistics(int topN, bool orderBySize, Task<List<TypeInfo>> typeInfosTask)
+        private int PrintTypeStatistics(int topN, int minCount, bool orderBySize, Task<List<TypeInfo>> typeInfosTask)
         {
             int allocatedMemoryInKB = 0;
             var typeInfos = typeInfosTask.Result;
+
+            if( minCount > 0 )
+            {
+                typeInfos = typeInfos.Where(x => x.Count > minCount).ToList();
+            }
             typeInfos.Sort((x, y) => orderBySize ? y.AllocatedSizeInBytes.CompareTo(x.AllocatedSizeInBytes) : y.Count.CompareTo(x.Count));
-            string fmt = "{0,-17:N0}\t{1,-17:N0}\t{2}";
-            OutputStringWriter.FormatAndWrite(fmt, "Allocated" + DisplayUnit, "Instances(Count)", "Type");
 
             // can be null if only live objects are considered.
             var free = typeInfos.FirstOrDefault(x => x.Name == FreeTypeName);
@@ -97,26 +172,26 @@ namespace MemAnalyzer
                     {
                         continue;
                     }
-                    OutputStringWriter.FormatAndWrite(fmt, type.AllocatedSizeInBytes / (long)DisplayUnit, type.Count, type.Name);
+                    WriteTypeStatisticsLine(type.AllocatedSizeInBytes / (long)DisplayUnit, type.Count, type.Name);
                 }
             }
 
             // Total heap size is only possible to calculate if the free objects are included 
             if (free != null)
             {
-                OutputStringWriter.FormatAndWrite(fmt, free.AllocatedSizeInBytes / (long)DisplayUnit, free.Count, "Managed Heap(Free)");
-                OutputStringWriter.FormatAndWrite(fmt, typeInfos.Sum(x => (float)x.AllocatedSizeInBytes) / (long)DisplayUnit, "", "Managed Heap(Size)");
+                WriteTypeStatisticsLine(free.AllocatedSizeInBytes / (long)DisplayUnit, free.Count, ManagedHeapFree);
+                WriteTypeStatisticsLine((long) (typeInfos.Sum(x => (float)x.AllocatedSizeInBytes) / (long)DisplayUnit), 0, ManagedHeapSize);
             }
 
             float managedAllocatedBytes = typeInfos.Where(x => free != null ? x != free : true).Sum(x => (float)x.AllocatedSizeInBytes);
 
-            OutputStringWriter.FormatAndWrite(fmt, managedAllocatedBytes / (long)DisplayUnit, typeInfos.Where(x => x != free).Sum(x => (float)x.Count), "Managed Heap(Allocated)");
+            WriteTypeStatisticsLine( (long) (managedAllocatedBytes / (long)DisplayUnit), typeInfos.Where(x => x != free).Sum(x => (long)x.Count), ManagedHeapAllocated);
             allocatedMemoryInKB = (int)(managedAllocatedBytes / (long)DisplayUnit.KB);
             if (GetVMMapData)
             {
                 VMMapData data = GetVMMapDataFromProcess(true, TargetInfo, Heap);
-                WriteVMMapData(GetSimpleTypeFormatter(fmt, DisplayUnit), data);
-                OutputStringWriter.FormatAndWrite(fmt, (managedAllocatedBytes + data.AllocatedBytesWithoutManagedHeap) / (long)DisplayUnit, "", "Allocated(Total)");
+                WriteVMMapData(GetSimpleTypeFormatter(DisplayUnit), data);
+                WriteTypeStatisticsLine((long) ((managedAllocatedBytes + data.AllocatedBytesWithoutManagedHeap) / (long)DisplayUnit), 0, AllocatedTotal);
                 allocatedMemoryInKB += (int)(data.AllocatedBytesWithoutManagedHeap / (long)DisplayUnit.KB);
             }
 
@@ -132,17 +207,23 @@ namespace MemAnalyzer
         /// <param name="vmmap2"></param>
         /// <param name="topN"></param>
         /// <param name="orderBySize"></param>
+        /// <param name="minCount"></param>
         /// <returns>Allocated memory diff in KB. If VMmap data is present the total allocated memory diff for allocated managed heap, heap, private, file mappings and sharable memory is returned.</returns>
-        private int PrintTypeStatisticsDiff(List<TypeInfo> typeInfos, List<TypeInfo> typeInfos2, VMMapData vmmap, VMMapData vmmap2, int topN, bool orderBySize)
+        private int PrintTypeStatisticsDiff(List<TypeInfo> typeInfos, List<TypeInfo> typeInfos2, VMMapData vmmap, VMMapData vmmap2, int topN, int minCount, bool orderBySize)
         {
             int allocatedMemoryInKB = 0;
 
             TypeDiffStatistics delta = GetDiffStatistics(typeInfos, typeInfos2, orderBySize);
 
+            if (minCount > 0)
+            {
+                delta.TypeDiffs = delta.TypeDiffs.Where(x => Math.Abs(x.InstanceCountDiff) > minCount).ToList();
+            }
+
             string fmt = "{0,-12:N0}\t{1,-17:N0}\t{2,-11:N0}\t{3,-11:N0}\t{4,-17:N0}\t{5,-18:N0}" +
                         "\t{6,-14}\t{7,-15}\t{8}";
 
-            OutputStringWriter.FormatAndWrite(fmt, $"Delta({DisplayUnit})", "Delta(Instances)", "Instances", "Instances2", $"Allocated({DisplayUnit})", $"Allocated2({DisplayUnit})", 
+            OutputStringWriter.FormatAndWriteHeader(fmt, $"Delta({DisplayUnit})", "Delta(Instances)", "Instances", "Instances2", $"Allocated({DisplayUnit})", $"Allocated2({DisplayUnit})", 
                         "AvgSize(Bytes)", "AvgSize2(Bytes)", "Type");
 
             long unitDivisor = (long)DisplayUnit;
@@ -164,7 +245,7 @@ namespace MemAnalyzer
 
             allocatedMemoryInKB = (int) ( delta.DeltaBytes / (long) DisplayUnit.KB );
             OutputStringWriter.FormatAndWrite(fmt, delta.DeltaBytes / unitDivisor, delta.DeltaInstances, delta.Count, delta.Count2, delta.SizeInBytes / unitDivisor,
-                                      delta.SizeInBytes2 / unitDivisor, "", "", "Managed Heap(Allocated)");
+                                      delta.SizeInBytes2 / unitDivisor, "", "", ManagedHeapAllocated);
 
             if ( vmmap != null && vmmap2 != null && vmmap.HasValues && vmmap2.HasValues)
             {
@@ -172,7 +253,7 @@ namespace MemAnalyzer
                 WriteVMMapDataDiff(GetSimpleDiffFormatter(fmt, DisplayUnit), vmmap, vmmap2, diff);
                 OutputStringWriter.FormatAndWrite(fmt, (diff.AllocatedBytesWithoutManagedHeap+delta.DeltaBytes) / unitDivisor, "", "", "",  
                     ( delta.SizeInBytes + vmmap.AllocatedBytesWithoutManagedHeap ) / unitDivisor, ( vmmap2.AllocatedBytesWithoutManagedHeap + delta.SizeInBytes2 ) / unitDivisor, ""
-                    , "", "Allocated(Total)");
+                    , "", AllocatedTotal);
 
                 // When VMMap data is present add the other memory types which usually leak as well also to the allocation number.
                 allocatedMemoryInKB += (int) ( diff.AllocatedBytesWithoutManagedHeap  / (long)DisplayUnit.KB);
@@ -277,15 +358,15 @@ namespace MemAnalyzer
             // free blocks only play a role in x86 
             if (vm.LargestFreeBlockBytes < 4 * 1024 * 1024 * 1024L)
             {
-                formatter("VMMap(Reserved_LargestFreeBlock)", vm.LargestFreeBlockBytes);
+                formatter(Reserved_LargestFreeBlock, vm.LargestFreeBlockBytes);
             }
-            formatter("VMMap(Reserved_Stack)", vm.Reserved_Stack);
-            formatter("VMMap(Committed_Dll)", vm.Committed_DllBytes);
-            formatter("VMMap(Committed_Heap)", vm.Committed_HeapBytes);
-            formatter("VMMap(Committed_MappedFile)", vm.Committed_MappedFileBytes);
-            formatter("VMMap(Committed_Private)", vm.Committed_PrivateBytes);
-            formatter("VMMap(Committed_Shareable)", vm.Committed_ShareableBytes);
-            formatter("VMMap(Committed_Total)", vm.TotalCommittedBytes);
+            formatter(Reserved_Stack, vm.Reserved_Stack);
+            formatter(Committed_Dll, vm.Committed_DllBytes);
+            formatter(Committed_Heap, vm.Committed_HeapBytes);
+            formatter(Committed_MappedFile, vm.Committed_MappedFileBytes);
+            formatter(Committed_Private, vm.Committed_PrivateBytes);
+            formatter(Committed_Shareable, vm.Committed_ShareableBytes);
+            formatter(Committed_Total, vm.TotalCommittedBytes);
         }
 
         /// <summary>
@@ -295,20 +376,19 @@ namespace MemAnalyzer
         /// <param name="vm"></param>
         void WriteVMMapDataDiff(Action<string, long, long, long> formatter, VMMapData vm, VMMapData vm2, VMMapData diff)
         {
-            formatter("VMMap(Reserved_Stack)", diff.Reserved_Stack, vm.Reserved_Stack, vm2.Reserved_Stack);
+            formatter(Reserved_Stack, diff.Reserved_Stack, vm.Reserved_Stack, vm2.Reserved_Stack);
             // free blocks only play a role in x86 
             if (vm.LargestFreeBlockBytes < 4 * 1024 * 1024 * 1024L)
             {
-                formatter("VMMap(Reserved_LargestFreeBlock)", diff.LargestFreeBlockBytes, vm.LargestFreeBlockBytes, vm2.LargestFreeBlockBytes);
+                formatter(Reserved_LargestFreeBlock, diff.LargestFreeBlockBytes, vm.LargestFreeBlockBytes, vm2.LargestFreeBlockBytes);
             }
 
-            formatter("VMMap(Committed_Dll)", diff.Committed_DllBytes, vm.Committed_DllBytes, vm2.Committed_DllBytes);
-            formatter("VMMap(Committed_Heap)", diff.Committed_HeapBytes, vm.Committed_HeapBytes, vm2.Committed_HeapBytes);
-            formatter("VMMap(Committed_MappedFile)", diff.Committed_MappedFileBytes, vm.Committed_MappedFileBytes, vm2.Committed_MappedFileBytes);
-            formatter("VMMap(Committed_Private)", diff.Committed_PrivateBytes, vm.Committed_PrivateBytes, vm2.Committed_PrivateBytes);
-            formatter("VMMap(Committed_Shareable)", diff.Committed_ShareableBytes, vm.Committed_ShareableBytes, vm2.Committed_ShareableBytes);
-
-            formatter("VMMap(Committed_Total)", diff.TotalCommittedBytes, vm.TotalCommittedBytes, vm2.TotalCommittedBytes);
+            formatter(Committed_Dll, diff.Committed_DllBytes, vm.Committed_DllBytes, vm2.Committed_DllBytes);
+            formatter(Committed_Heap, diff.Committed_HeapBytes, vm.Committed_HeapBytes, vm2.Committed_HeapBytes);
+            formatter(Committed_MappedFile, diff.Committed_MappedFileBytes, vm.Committed_MappedFileBytes, vm2.Committed_MappedFileBytes);
+            formatter(Committed_Private, diff.Committed_PrivateBytes, vm.Committed_PrivateBytes, vm2.Committed_PrivateBytes);
+            formatter(Committed_Shareable, diff.Committed_ShareableBytes, vm.Committed_ShareableBytes, vm2.Committed_ShareableBytes);
+            formatter(Committed_Total, diff.TotalCommittedBytes, vm.TotalCommittedBytes, vm2.TotalCommittedBytes);
         }
 
         /// <summary>
@@ -332,12 +412,12 @@ namespace MemAnalyzer
         /// <param name="fmt">Type format string.</param>
         /// <param name="unit">Unit in which tye type is formatted.</param>
         /// <returns>Delegate which will format the type and its size in the respective unit.</returns>
-        Action<string, long> GetSimpleTypeFormatter(string fmt, DisplayUnit unit)
+        Action<string, long> GetSimpleTypeFormatter(DisplayUnit unit)
         {
             return (typeName, sizeInBytes) =>
             {
                 long unitDivisor = (long)unit;
-                OutputStringWriter.FormatAndWrite(fmt, (long)(sizeInBytes / unitDivisor), "", typeName);
+                WriteTypeStatisticsLine((long)(sizeInBytes / unitDivisor), 0, typeName);
             };
         }
 

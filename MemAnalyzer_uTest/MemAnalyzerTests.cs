@@ -166,12 +166,12 @@ namespace MemAnalyzer_uTest
             //  5.115.904                               VMMap(Committed_Shareable)
             //  115.458.048                             VMMap(Committed_Total)
             //  47.552.940                              Allocated(Total)
-            var parts = lines[1].Split("\t ".ToCharArray(), StringSplitOptions.RemoveEmptyEntries).Select(x => x.Replace(".", "")).ToArray();
+            var parts = lines[1].Split("\t ".ToCharArray(), StringSplitOptions.RemoveEmptyEntries).Select(x => x.Replace(".", "").Replace(",","")).ToArray();
 
             int bytes = int.Parse(parts[0]);
             int count = int.Parse(parts[1]);
 
-            Assert.IsTrue(bytes > 25 * 1000 * 1000, $"Allocated strings must be > 25MB but was {bytes} bytes");
+            Assert.IsTrue(bytes > 24 * 1000 * 1000, $"Allocated strings must be > 25MB but was {bytes} bytes");
             Assert.IsTrue(count > 500 * 1000, $"Allocated string cont must be > 500K but was {count}");
             
 

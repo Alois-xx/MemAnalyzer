@@ -118,7 +118,7 @@ namespace MemAnalyzer
         /// <returns>Read command line or an empty string if no process could be found.</returns>
         public static string GetProcessCommandLine(int pid)
         {
-            string query = String.Format("SELECT Name, CommandLine, ProcessId FROM Win32_Process WHERE ProcessId='{0}'", pid);
+            string query = $"SELECT Name, CommandLine, ProcessId FROM Win32_Process WHERE ProcessId='{pid}'";
             ManagementObjectSearcher searcher = new ManagementObjectSearcher(query);
             foreach(ManagementObject mo in searcher.Get())
             {

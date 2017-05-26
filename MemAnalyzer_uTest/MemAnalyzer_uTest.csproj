@@ -64,15 +64,18 @@
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
+    <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="DumpCreatorTests.cs" />
     <Compile Include="MemAnalyzerTests.cs" />
     <Compile Include="OutputStringWriterTests.cs" />
+    <Compile Include="ProcessRenamerTests.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="VMMapTests.cs" />
   </ItemGroup>
   <ItemGroup>
+    <Content Include="Dumps\ExampleProcessRenameFile.xml" />
     <Content Include="Dumps\vmmap.csv">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>

@@ -1,0 +1,17 @@
+﻿<?xml version="1.0"?>
+<ProcessRenamer xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <ProcessRenamers>
+    <RenameRule>
+      <!-- Process name without .exe extension! -->
+      <ExeName>w3wp</ExeName>
+      <!-- List of substring to match in AND fashion. If all substrings of the command line match the NewExeName is used -->
+      <CmdLineSubstrings>
+        <string>First</string>
+      </CmdLineSubstrings>
+      <NotCmdLineSubstrings>
+        <string>Not</string>
+      </NotCmdLineSubstrings>
+      <NewExeName>NewW3wp</NewExeName>
+    </RenameRule>
+  </ProcessRenamers>
+</ProcessRenamer>

@@ -93,23 +93,24 @@
       <DependentUpon>Binaries.resx</DependentUpon>
     </Compile>
     <Compile Include="DebugPrinter.cs" />
-    <Compile Include="DumpCreator.cs" />
-    <Compile Include="InternalExtensions.cs" />
-    <Compile Include="MemAnalyzer.cs" />
-    <Compile Include="MemAnalyzerBase.cs" />
+    <Compile Include="ProcessHelper\DumpCreator.cs" />
+    <Compile Include="Analyzers\InternalExtensions.cs" />
+    <Compile Include="Analyzers\MemAnalyzer.cs" />
+    <Compile Include="Analyzers\MemAnalyzerBase.cs" />
     <Compile Include="NativeMethods.cs" />
-    <Compile Include="ObjectSet.cs" />
-    <Compile Include="ProcessFilter.cs" />
+    <Compile Include="Analyzers\ObjectSet.cs" />
+    <Compile Include="ProcessHelper\ProcessFilter.cs" />
+    <Compile Include="ProcessHelper\ProcessRenamer.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="OutputStringWriter.cs" />
-    <Compile Include="StringStatisticsCommand.cs" />
+    <Compile Include="Analyzers\StringStatisticsCommand.cs" />
     <Compile Include="TargetInformation.cs" />
-    <Compile Include="TypeDiffStatistics.cs" />
-    <Compile Include="TypeInstance.cs" />
-    <Compile Include="DisplayUnit.cs" />
-    <Compile Include="VMMapData.cs" />
-    <Compile Include="VMMap.cs" />
+    <Compile Include="Analyzers\TypeDiffStatistics.cs" />
+    <Compile Include="Analyzers\TypeInstance.cs" />
+    <Compile Include="Analyzers\DisplayUnit.cs" />
+    <Compile Include="VMMap\VMMapData.cs" />
+    <Compile Include="VMMap\VMMap.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />

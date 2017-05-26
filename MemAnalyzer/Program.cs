@@ -1,6 +1,7 @@
 ﻿using Microsoft.Diagnostics.Runtime;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -17,16 +18,21 @@ namespace MemAnalyzer
         static int TopN = 20;
 
         /// <summary>
+        /// Lower limit when e.g. all objects with a count > MinCount should be included in the output to get smaller relevant output
+        /// </summary>
+        static int MinCount = 0;
+
+        /// <summary>
         /// Path to public OneDrive which contains practically from all .NET versions all DAC dlls. 
         /// </summary>
         const string DacCollection = "https://1drv.ms/f/s!AhcFq7XO98yJgoMwuPd7LNioVKAp_A";
 
         static string HelpStr = String.Format("MemAnalyzer {0} by Alois Kraus 2017", Assembly.GetExecutingAssembly().GetName().Version) + Environment.NewLine +
-                                "Usage: MemAnalyzer [ -f DumpFile or -pid ddd [ -f2 DumpFile or -pid2 ddd ] -dts [N] or -dtn [N] or -dstrings [N] [-live] [-unit DisplayUnit] [-vmmap] ] [-gc xxx [-process xxx.exe] ] [-o Output.csv [-sep \t]] [[-verifydump] -procdump pidOrExe [outputDumpFileOrDir]] " + Environment.NewLine +
+                                "Usage: MemAnalyzer [ -f DumpFile or -pid ddd [ -f2 DumpFile or -pid2 ddd ] -dts [N] or -dtn [N] or -dstrings [N] [-live] [-unit DisplayUnit] [-vmmap] ] [-gc xxx [-process xxx.exe] ] [-o Output.csv [-sep \\t] [-noexcelsep]] [[-verifydump] -procdump pidOrExe [outputDumpFileOrDir]] " + Environment.NewLine +
                                 "       -f fileName          Dump file to analyze." + Environment.NewLine +
-                                "       -f2 fileName         Diff Dump files" + Environment.NewLine +
+                                "       -f2 fileName         Second dump file to diff." + Environment.NewLine +
                                 "       -pid ddd             Live process to analyze." + Environment.NewLine +
-                                "       -pid2 ddd            Live process to diff. You can combined it to e.g. compare a live process with a dump. Subtraction is done -xxx2 - xxxx where xxx is Pid or f" + Environment.NewLine +
+                                "       -pid2 ddd            Second live process to diff. You can also mix to compare e.g. a dump and a live process e.g. -pid2 ddd -f dump.dmp" + Environment.NewLine +
                                 "       -vmmap               Fetch from live processes VMMAP data. VMMap.exe must be in the path to work." + Environment.NewLine +
                                $"       -dts N               Dump top N types by object size. Default for N is {TopN}." + Environment.NewLine +
                                $"       -dtn N               Dump top N types by object count. Default for N is {TopN}." + Environment.NewLine +
@@ -36,9 +42,17 @@ namespace MemAnalyzer
                                 "       -live                If present only reachable (live) objects are considered in the statistics. Takes longer to calculate." + Environment.NewLine +
                                 "       -dacdir dir          If the dump file is from a machine with a different version you can tell MemAnalyzer in which directory to search for matching dac dlls." + Environment.NewLine +
                                $"                            See {DacCollection} for a collection of dac dlls from .NET 2.0 up to 4.7." + Environment.NewLine +
+                                " Dump Creation  " + Environment.NewLine + 
                                 "       -procdump args       Create a memory dump and VMMap snapshot of a process. Needs procdump.exe and vmmap.exe in the path to work." + Environment.NewLine +
                                 "       -verifydump          Used with -procdump. This checks the managed heap for consistency to be sure that it can be loaded later" + Environment.NewLine +
+                                " CSV Output " + Environment.NewLine +
                                 "       -o output.csv        Write output to csv file instead of console" + Environment.NewLine +
+                                "       -overwrite           Overwrite CSV output if file already exist. Otherwise it is appended." + Environment.NewLine +
+                                "       -timefmt \"xxx\"       xxx can be Invariant or a .NET DateTime format string for CSV output. See https://msdn.microsoft.com/en-us/library/8kb3ddd4(v=vs.110).aspx" + Environment.NewLine + 
+                                "       -context \"xxx\"       Additional context which is added to the context column. Useful for test reporting to e.g. add test run number to get a metric how much it did leak per test run" + Environment.NewLine +
+                                "       -sep \"x\"             CSV separator character. Default is tab." + Environment.NewLine +
+                                "       -noexcelsep          By default write sep= to make things easier when working with Excel. When set sep= is not added to CSV output" + Environment.NewLine + 
+                                "       -renameProc xxx.xml  Optional xml file which contains executable and command line substrings to rename processes based on their command line to get better names." + Environment.NewLine  +
                                 " Return Value: If -dts/dtn is used it will return the allocated managed memory in KB." + Environment.NewLine +
                                 "               If additionally -vmmap is present it will return allocated Managed Heap + Heap + Private + Shareable + File Mappings." + Environment.NewLine +
                                 "               That enables leak detection during automated tests which can then e.g. enable allocation profiling on demand." + Environment.NewLine  +
@@ -83,9 +97,38 @@ namespace MemAnalyzer
         public string OutFile { get; private set; }
 
         /// <summary>
+        /// Overwrite CSV file 
+        /// </summary>
+        bool OverWriteOutFile = false;
+
+        /// <summary>
+        /// By default the first line of the CSV file will contain the line Sep= 
+        /// to allow Excel to parse the CSV correctly. Otherwise it can happen that it splits e.g. the Type Name at , when opening 
+        /// on a German machine. 
+        /// </summary>
+        public bool DisableExcelCSVSep { get; private set; }
+
+        /// <summary>
+        /// Used by MemAnalyzer to format date time strings
+        /// </summary>
+        string TimeFormat { get; set; }
+
+        /// <summary>
+        /// Additional column which is added to CSV output to e.g. add the test run number or other context things to it.
+        /// </summary>
+        string Context { get; set; }
+
+        /// <summary>
         /// When true fetch from live processes VMMap information if VMMap is in the path.
         /// </summary>
         bool GetVMMapData { get; set; }
+
+        /// <summary>
+        /// File which contains configuration to rename an executable to a more descriptive name based on its command line parameters. 
+        /// This is useful when you are dealing with generic container processes such as w3wp.exe where many instances of them can be running
+        /// at the same time.
+        /// </summary>
+        public string ProcessRenameFile { get; private set; }
 
         DataTarget Target = null;
         DataTarget Target2 = null;
@@ -198,8 +241,14 @@ namespace MemAnalyzer
                         case "-verifydump":
                             VerifyDump = true;
                             break;
+                        case "-renameproc":
+                            ProcessRenameFile = NotAnArg(args.Dequeue());
+                            break;
                         case "-debug":
                             IsDebug = true;
+                            break;
+                        case "-noexcelsep":
+                            DisableExcelCSVSep = true;
                             break;
                         case "-sep":
                             string sep = NotAnArg(args.Dequeue());
@@ -218,14 +267,16 @@ namespace MemAnalyzer
                             Action = Actions.DumpTypesBySize;
                             if ( args.Count > 0 && NotAnArg(args.Peek(),false) != null)
                             {
-                                TopN = int.Parse(args.Dequeue());
+                                ParseTopNQuery(args.Dequeue(), out int n, out int MinCount);
+                                TopN = n > 0 ? n : TopN;
                             }
                             break;
                         case "-dtn":
                             Action = Actions.DumpTypesByCount;
                             if (args.Count > 0 && NotAnArg(args.Peek(),false) != null)
                             {
-                                TopN = int.Parse(args.Dequeue());
+                                ParseTopNQuery(args.Dequeue(), out int n, out MinCount);
+                                TopN =  n > 0 ? n : TopN;
                             }
                             break;
                         case "-live":
@@ -254,6 +305,15 @@ namespace MemAnalyzer
                             TopN = 20 * 1000; // if output is dumped to file pipe all types to output
                                               // if later -dts/-dstrings/-dtn is specified one can still override this behavior.
                             break;
+                        case "-overwrite":
+                            OverWriteOutFile = true;
+                            break;
+                        case "-timefmt":
+                            TimeFormat = NotAnArg(args.Dequeue());
+                            break;
+                        case "-context":
+                            Context = NotAnArg(args.Dequeue());
+                            break;
                         default:
                             throw new ArgNotExpectedException(param);
                     }
@@ -267,6 +327,42 @@ namespace MemAnalyzer
             }
 
             return lret;
+        }
+
+        /// <summary>
+        /// Query can be 100;N#1 or N#1 or 100
+        /// </summary>
+        /// <param name="query">Query string to parse</param>
+        private void ParseTopNQuery(string query, out int n, out int minCount)
+        {
+            var parts = query.Replace(" ", "").Split(";".ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+            string condition = null;
+            minCount = 0;
+            if( int.TryParse(parts[0], out n) == false )
+            {
+                condition = parts[0];
+            }
+            else if( parts.Length>1)
+            {
+                condition = parts[1];
+            }
+
+            if( condition != null)
+            {
+                // cannot use > sign because the shell will interpret it was file redirection character.
+                if( condition.IndexOf("N", StringComparison.OrdinalIgnoreCase) == 0  && condition.IndexOf('#') == 1 )
+                {
+                    int.TryParse(condition.Substring(2), out minCount);
+                    DebugPrinter.Write($"Condition: {condition}, MinValue: {minCount}");
+                }
+                else
+                {
+                    Console.WriteLine($"Warning condition {condition} of query {query} could not be parsed.");
+                    Console.WriteLine("A query contains ddd;N#ddd2 where ddd is the TopN limit and dddd2 will print only types which have an instance count > ddd2");
+                }
+            }
+
+            DebugPrinter.Write($"N: {n}, MinCount: {minCount}");
         }
 
         string NotAnArg(string arg, bool bthrow=true)
@@ -294,26 +390,45 @@ namespace MemAnalyzer
             ShowHelpMessage = false; // When we now throw exceptions it is not due to wrong command line arguments. 
             try
             {
+                TargetInformation.LoadProcessRenameFile(ProcessRenameFile);
+
+
                 if (!String.IsNullOrEmpty(OutFile))
                 {
                     OutputStringWriter.CsvOutput = true;
-                    OutputStringWriter.Output = new StreamWriter(OutFile);
+                    OutputStringWriter.DisableExcelCSVSep = DisableExcelCSVSep;
+                    FileStream file = new FileStream(OutFile, (OverWriteOutFile || TargetInformation.IsProcessCompare) ? FileMode.Create : FileMode.Append);
+                    OutputStringWriter.Output = new StreamWriter(file);
+                    var info = new FileInfo(OutFile);
+
+                    // skip header if file has already content
+                    if( info.Exists && info.Length > 0 )
+                    {
+                        OutputStringWriter.SuppressHeader = true;
+                    }
+
+                    // when child process is spawned do not print the same message twice
+                    if (!IsChild)
+                    {
+                        Console.WriteLine($"Writing output to csv file {OutFile}");
+                    }
                 }
                 analyzer = CreateAnalyzer(Action);
+
                 switch (Action)
                 {
                     case Actions.None:
                         Help("No command specified.");
                         break;
                     case Actions.DumpTypesByCount:
-                        int? allocatedKB = (analyzer as MemAnalyzer)?.DumpTypes(TopN, false);
+                        int? allocatedKB = (analyzer as MemAnalyzer)?.DumpTypes(TopN, false, MinCount);
                         if (allocatedKB != null)
                         {
                             ReturnCode = allocatedKB.Value;
                         }
                         break;
                     case Actions.DumpTypesBySize:
-                        allocatedKB = (analyzer as MemAnalyzer)?.DumpTypes(TopN, true);
+                        allocatedKB = (analyzer as MemAnalyzer)?.DumpTypes(TopN, true, MinCount);
                         if (allocatedKB != null)
                         {
                             ReturnCode = allocatedKB.Value;
@@ -333,11 +448,6 @@ namespace MemAnalyzer
             finally
             {
                 OutputStringWriter.Flush();
-
-                if (OutputStringWriter.CsvOutput)
-                {
-                    Console.WriteLine($"Writing output to csv file {OutFile}");
-                }
 
                 if (analyzer != null)
                 {
@@ -363,6 +473,7 @@ namespace MemAnalyzer
             string path = Environment.GetEnvironmentVariable("PATH");
             path += ";" + Path.GetDirectoryName(Assembly.GetEntryAssembly().Location);
             Environment.SetEnvironmentVariable("PATH", path);
+            DebugPrinter.Write($"Set Path={path}");
         }
 
         public ClrHeap GetHeap(DataTarget target)
@@ -537,14 +648,21 @@ namespace MemAnalyzer
             {
                 // Default is a 32 bit process if runtime creation fails with InvalidOperationException or a DAC location failure
                 // we try x64 as fall back. This will work if the bitness of the dump file is wrong.
-                if(!Environment.Is64BitProcess && (ex is FileNotFoundException || ex is InvalidOperationException || ex is ClrDiagnosticsException ||
-                                                  (ex is COMException && ex.HResult == HResultNotEnoughStorage)) ) 
+                if (!Environment.Is64BitProcess && (ex is FileNotFoundException || ex is InvalidOperationException || ex is ClrDiagnosticsException ||
+                                                  (ex is COMException && ex.HResult == HResultNotEnoughStorage)))
                 {
                     RestartWithx64();
                 }
-               else
+                else
                 {
-                    throw;
+                    if (ex is Win32Exception win32 && win32.NativeErrorCode == 5)
+                    {
+                        Console.WriteLine("Error: You need to run with elevated rights to access this process.");
+                    }
+                    else
+                    {
+                        throw;
+                    }
                 }
             }
 
@@ -554,7 +672,7 @@ namespace MemAnalyzer
                 {
                     case Actions.DumpTypesByCount:
                     case Actions.DumpTypesBySize:
-                        return new MemAnalyzer(heap, heap2, LiveOnly, GetVMMapData, TargetInformation, DisplayUnit);
+                        return new MemAnalyzer(heap, heap2, LiveOnly, GetVMMapData, TargetInformation, DisplayUnit, TimeFormat, Context);
                     case Actions.DumpStrings:
                         return new StringStatisticsCommand(heap, heap2, LiveOnly, DisplayUnit);
                     case Actions.None:

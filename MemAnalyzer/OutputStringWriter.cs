@@ -52,6 +52,12 @@ namespace MemAnalyzer
             get => _SeparatorChar;
             set => _SeparatorChar = value;
         }
+        public static bool SuppressHeader { get; internal set; }
+
+        /// <summary>
+        /// see https://superuser.com/questions/407082/easiest-way-to-open-csv-with-commas-in-excel why this was added.
+        /// </summary>
+        public static bool DisableExcelCSVSep { get; internal set; }
 
         public static void Flush()
         {
@@ -96,6 +102,18 @@ namespace MemAnalyzer
         public static void FormatAndWrite(string fmt, params object[] args)
         {
             Output.WriteLine(Format(fmt, args));
+        }
+
+        public static void FormatAndWriteHeader(string fmt, params object[] args)
+        {
+            if( !SuppressHeader )
+            {
+                if (!DisableExcelCSVSep && CsvOutput)
+                {
+                    FormatAndWrite($"sep={SeparatorChar}");
+                }
+                FormatAndWrite(fmt, args);
+            }
         }
     }
 }
