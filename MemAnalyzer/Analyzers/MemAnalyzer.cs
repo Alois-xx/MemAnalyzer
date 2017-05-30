@@ -13,6 +13,7 @@ namespace MemAnalyzer
     /// </summary>
     class MemAnalyzer : MemAnalyzerBase
     {
+        // Magic type names for special Free type name
         const string FreeTypeName = "Free";
 
         bool GetVMMapData;
@@ -56,7 +57,8 @@ namespace MemAnalyzer
         /// <param name="displayunit">Units in which bytes should be displayed</param>
         /// <param name="timeFormat">.NET Format string for time and date. If value is Invariant then the invariant culture is used to format.</param>
         /// <param name="context">Optional context column which is printed to each output line when CSV output is enabled to e.g. dump the memory for test run nr 1, 2, 3, which gives nice metric in Excel later.</param>
-        public MemAnalyzer(ClrHeap heap, ClrHeap heap2, bool bLiveOnly, bool bGetVMMapData, TargetInformation info, DisplayUnit displayunit=DisplayUnit.MB, string timeFormat=null, string context = null) :base(heap, heap2, bLiveOnly, displayunit)
+        public MemAnalyzer(ClrHeap heap, ClrHeap heap2, bool bLiveOnly, bool bGetVMMapData, TargetInformation info, DisplayUnit displayunit=DisplayUnit.MB, string timeFormat=null, string context = null) 
+            :base(heap, heap2, bLiveOnly, displayunit)
         {
             GetVMMapData = bGetVMMapData;
             TargetInfo = info;
@@ -180,12 +182,13 @@ namespace MemAnalyzer
             if (free != null)
             {
                 WriteTypeStatisticsLine(free.AllocatedSizeInBytes / (long)DisplayUnit, free.Count, ManagedHeapFree);
-                WriteTypeStatisticsLine((long) (typeInfos.Sum(x => (float)x.AllocatedSizeInBytes) / (long)DisplayUnit), 0, ManagedHeapSize);
             }
 
             float managedAllocatedBytes = typeInfos.Where(x => free != null ? x != free : true).Sum(x => (float)x.AllocatedSizeInBytes);
 
             WriteTypeStatisticsLine( (long) (managedAllocatedBytes / (long)DisplayUnit), typeInfos.Where(x => x != free).Sum(x => (long)x.Count), ManagedHeapAllocated);
+            WriteTypeStatisticsLine(Heap.GetTotalHeapSize(), 0,  ManagedHeapSize);
+
             allocatedMemoryInKB = (int)(managedAllocatedBytes / (long)DisplayUnit.KB);
             if (GetVMMapData)
             {
@@ -246,6 +249,10 @@ namespace MemAnalyzer
             allocatedMemoryInKB = (int) ( delta.DeltaBytes / (long) DisplayUnit.KB );
             OutputStringWriter.FormatAndWrite(fmt, delta.DeltaBytes / unitDivisor, delta.DeltaInstances, delta.Count, delta.Count2, delta.SizeInBytes / unitDivisor,
                                       delta.SizeInBytes2 / unitDivisor, "", "", ManagedHeapAllocated);
+            long heap1Size = Heap.GetTotalHeapSize();
+            long heap2Size = Heap2.GetTotalHeapSize();
+
+            OutputStringWriter.FormatAndWrite(fmt, (heap2Size - heap1Size) / unitDivisor, 0, 0, 0, heap1Size / unitDivisor, heap2Size / unitDivisor, "", "", ManagedHeapSize);
 
             if ( vmmap != null && vmmap2 != null && vmmap.HasValues && vmmap2.HasValues)
             {

@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.Diagnostics.Runtime;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -24,6 +25,11 @@ namespace MemAnalyzer
             if (info == null)
                 return 0;
             return info.AllocatedSizeInBytes;
+        }
+
+        public static long GetTotalHeapSize(this ClrHeap heap)
+        {
+            return heap.Segments.Sum(seg => (long)seg.Length);
         }
     }
 }
