@@ -64,7 +64,7 @@ namespace MemAnalyzer
             TargetInfo = info;
             ProcessName = TargetInfo.IsLiveProcess? TargetInformation.GetProcessName(TargetInfo.Pid1) : "";
             CmdLine = TargetInfo.IsLiveProcess ? TargetInformation.GetProcessCmdLine(TargetInfo.Pid1) : "";
-            var now = DateTime.Now;
+            DateTime now = TargetInfo.CurrentTimeOrDumpCreationDate;
             TimeAndOrDate = timeFormat == "Invariant" ? now.ToString(CultureInfo.InvariantCulture) : now.ToString(timeFormat);
             Context = context;
         }
@@ -202,7 +202,7 @@ namespace MemAnalyzer
         }
 
         /// <summary>
-        /// Print type statistics.
+        /// Print type statistics diff.
         /// </summary>
         /// <param name="typeInfos"></param>
         /// <param name="typeInfos2"></param>
@@ -220,7 +220,7 @@ namespace MemAnalyzer
 
             if (minCount > 0)
             {
-                delta.TypeDiffs = delta.TypeDiffs.Where(x => Math.Abs(x.InstanceCountDiff) > minCount).ToList();
+                delta.TypeDiffs = delta.TypeDiffs.Where(x => Math.Abs( orderBySize ?  x.InstanceCountDiff : x.AllocatedBytesDiff) > minCount).ToList();
             }
 
             string fmt = "{0,-12:N0}\t{1,-17:N0}\t{2,-11:N0}\t{3,-11:N0}\t{4,-17:N0}\t{5,-18:N0}" +

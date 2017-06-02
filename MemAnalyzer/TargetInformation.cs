@@ -79,6 +79,20 @@ namespace MemAnalyzer
             get => Pid1 != 0;
         }
 
+        public DateTime CurrentTimeOrDumpCreationDate
+        {
+            get
+            {
+                DateTime lret = DateTime.Now;
+                if( !IsLiveProcess )
+                {
+                    lret = new FileInfo(DumpFileName1).CreationTime;
+                }
+
+                return lret;
+            }
+        }
+
         Process _Pid1Process;
 
         int _AgeInSeconds = -1;
