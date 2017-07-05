@@ -28,43 +28,51 @@ namespace MemAnalyzer
         const string DacCollection = "https://1drv.ms/f/s!AhcFq7XO98yJgoMwuPd7LNioVKAp_A";
 
         static string HelpStr = String.Format("MemAnalyzer {0} by Alois Kraus 2017", Assembly.GetExecutingAssembly().GetName().Version) + Environment.NewLine +
-                                "Usage: MemAnalyzer [ -f DumpFile or -pid ddd [ -f2 DumpFile or -pid2 ddd ] -dts [N] or -dtn [N] or -dstrings [N] [-live] [-unit DisplayUnit] [-vmmap] ] [-gc xxx [-process xxx.exe] ] [-o Output.csv [-sep \\t] [-noexcelsep]] [[-verifydump] -procdump pidOrExe [outputDumpFileOrDir]] " + Environment.NewLine +
+                                "Usage: " + Environment.NewLine  +
+                                "       MemAnalyzer [ -f DumpFile or -pid ddd [ -f2 DumpFile or -pid2 ddd ] -dts [N] or -dtn [N] or -dstrings [N] [-live] [-unit DisplayUnit] [-vmmap] ] "  + Environment.NewLine + 
+                                "                   [-o Output.csv [-sep \\t] [-noexcelsep] [-time \"externalTime\"]] " + Environment.NewLine +
+                                "                   [ [-verifydump] -procdump pidOrExe [outputDumpFileOrDir]] " + Environment.NewLine +
                                 "       -f fileName          Dump file to analyze." + Environment.NewLine +
                                 "       -f2 fileName         Second dump file to diff." + Environment.NewLine +
                                 "       -pid ddd             Live process to analyze." + Environment.NewLine +
                                 "       -pid2 ddd            Second live process to diff. You can also mix to compare e.g. a dump and a live process e.g. -pid2 ddd -f dump.dmp" + Environment.NewLine +
                                 "       -vmmap               Fetch from live processes VMMAP data. VMMap.exe must be in the path to work." + Environment.NewLine +
-                               $"       -dts N               Dump top N types by object size. Default for N is {TopN}." + Environment.NewLine +
+                               $"       -dts N               (default) Dump top N types by object size. Default for N is {TopN}." + Environment.NewLine +
                                $"       -dtn N               Dump top N types by object count. Default for N is {TopN}." + Environment.NewLine +
+                                "                            N can be a number or ddd;N#dd where the first number ddd is a threshold value to consider only types with an instance count greater ddd. The second number is the TopN number" + Environment.NewLine +
                                $"       -dstrings N          Dump top N duplicate strings and global statistics. Default for N is {TopN}." + Environment.NewLine +
-                                "         -showAddress       Show the address of one string of a given value" + Environment.NewLine +
+                                "       -showAddress         Used together with -dstrings. Show the address of one string of a given value" + Environment.NewLine +
                                 "       -unit DisplayUnit    DisplayUnit can be Bytes, KB, MB or GB" + Environment.NewLine +
                                 "       -live                If present only reachable (live) objects are considered in the statistics. Takes longer to calculate." + Environment.NewLine +
                                 "       -dacdir dir          If the dump file is from a machine with a different version you can tell MemAnalyzer in which directory to search for matching dac dlls." + Environment.NewLine +
                                $"                            See {DacCollection} for a collection of dac dlls from .NET 2.0 up to 4.7." + Environment.NewLine +
-                                " Dump Creation  " + Environment.NewLine + 
-                                "       -procdump args       Create a memory dump and VMMap snapshot of a process. Needs procdump.exe and vmmap.exe in the path to work." + Environment.NewLine +
+                                "       -silent              Suppress information messages" + Environment.NewLine +
+                                " Dump Creation:  " + Environment.NewLine +
+                                "       -procdump args       Create a memory dump and VMMap snapshot of a process. Needs procdump.exe and vmmap.exe in the path to work" + Environment.NewLine +
                                 "       -verifydump          Used with -procdump. This checks the managed heap for consistency to be sure that it can be loaded later" + Environment.NewLine +
                                 " CSV Output " + Environment.NewLine +
                                 "       -o output.csv        Write output to csv file instead of console" + Environment.NewLine +
-                                "       -overwrite           Overwrite CSV output if file already exist. Otherwise it is appended." + Environment.NewLine +
-                                "       -timefmt \"xxx\"       xxx can be Invariant or a .NET DateTime format string for CSV output. See https://msdn.microsoft.com/en-us/library/8kb3ddd4(v=vs.110).aspx" + Environment.NewLine + 
+                                "       -overwrite           Overwrite CSV output if file already exist. Otherwise it is appended" + Environment.NewLine +
+                                "       -timefmt \"xxx\"       xxx can be Invariant or a .NET DateTime format string for CSV output. See https://msdn.microsoft.com/en-us/library/8kb3ddd4(v=vs.110).aspx" + Environment.NewLine +
+                                "       -time    \"Mon...\"  Supply an external time string which is put into the Time column of the CSV output. This helps to group by time for a specific snapshot in Excel because otherwise MemAnalyzer will" + Environment.NewLine +
+                                "                            always use the current time for each process which is dumped. That makes it harder to filter by time for for a bunch of observed processes" + Environment.NewLine +
                                 "       -context \"xxx\"       Additional context which is added to the context column. Useful for test reporting to e.g. add test run number to get a metric how much it did leak per test run" + Environment.NewLine +
-                                "       -sep \"x\"             CSV separator character. Default is tab." + Environment.NewLine +
-                                "       -noexcelsep          By default write sep= to make things easier when working with Excel. When set sep= is not added to CSV output" + Environment.NewLine + 
-                                "       -renameProc xxx.xml  Optional xml file which contains executable and command line substrings to rename processes based on their command line to get better names." + Environment.NewLine  +
-                                " Return Value: If -dts/dtn is used it will return the allocated managed memory in KB." + Environment.NewLine +
-                                "               If additionally -vmmap is present it will return allocated Managed Heap + Heap + Private + Shareable + File Mappings." + Environment.NewLine +
-                                "               That enables leak detection during automated tests which can then e.g. enable allocation profiling on demand." + Environment.NewLine  +
+                                "       -sep \"x\"             CSV separator character. Default is tab" + Environment.NewLine +
+                                "       -noexcelsep          By default write sep= to make things easier when working with Excel. When set sep= is not added to CSV output" + Environment.NewLine +
+                                "       -renameProc xxx.xml  Optional xml file which contains executable and command line substrings to rename processes based on their command line to get better names" + Environment.NewLine +
+                                " Return Value: If -dts/dtn is used it will return the allocated managed memory in KB" + Environment.NewLine +
+                                "               If additionally -vmmap is present it will return allocated Managed Heap + Heap + Private + Shareable + File Mappings" + Environment.NewLine +
                                 "Examples" + Environment.NewLine +
-                                "Dump types by size from dump file." + Environment.NewLine +
-                                "\tMemAnalyzer -f xx.dmp -dts" + Environment.NewLine +
+                                "Dump types by size from dump file which was created with a different .NET Version" + Environment.NewLine +
+                                "\tMemAnalyzer -f xx.dmp -dts -dacdir c:\\mscordacwks" + Environment.NewLine +
                                 "Dump types by object count from a running process with process id ddd." + Environment.NewLine +
                                 "\tMemAnalyzer -pid ddd -dtn" + Environment.NewLine +
-                                "Diff two memory dump files where (f2 - f) are calculated." + Environment.NewLine +
-                                "\tMemAnalyzer -f dump1.dmp -f2 dump2.dmp -dts" + Environment.NewLine +
+                                "Diff two memory dump files where (f2 - f) is shown. VMMap information is also used to (see -procdump) to diff unmanaged heap and other memory types" + Environment.NewLine +
+                                "\tMemAnalyzer -f dump1.dmp -f2 dump2.dmp -dts -vmmap" + Environment.NewLine +
                                 "Dump string duplicates of live process and write it to CSV file" + Environment.NewLine +
-                                "\tMemAnalyzer -pid ddd -dstrings -o StringDuplicates.csv" + Environment.NewLine;
+                                "\tMemAnalyzer -pid ddd -dstrings -o StringDuplicates.csv" + Environment.NewLine +
+                                "Create a full process dump along with VMMap information if VMMap is in the path. Procdump will expand PROCESSNAME, PID, ... by itself " + Environment.NewLine +
+                                "\tMemAnalyzer -procdump -ma pid C:\\temp\\PROCESSNAME_PID_YYMMDD_HHMMSS.dmp" + Environment.NewLine;
 
         /// <summary>
         /// Returned by COMException if dump could not be loaded into current address space. 
@@ -130,11 +138,22 @@ namespace MemAnalyzer
         /// </summary>
         public string ProcessRenameFile { get; private set; }
 
+        public static bool IsSilent
+        {
+            get;
+            set;
+        }
+
         DataTarget Target = null;
         DataTarget Target2 = null;
 
         public static bool IsDebug = false;
-        bool IsChild = false;
+        public static bool IsChild
+        {
+            get;
+            set;
+        }
+
         bool ShowAddress = false;
 
         string DacDir = null;
@@ -189,7 +208,7 @@ namespace MemAnalyzer
             Queue<string> args = new Queue<string>(Args);
             if( args.Count == 0)
             {
-                Help("You need to specify a dump file or live process to analyze.");
+                Help("Error: You need to specify a dump file or live process to analyze.");
                 return false;
             }
 
@@ -217,6 +236,9 @@ namespace MemAnalyzer
                             break;
                         case "-pid2":
                             TargetInformation.Pid2 = int.Parse(NotAnArg(args.Dequeue()));
+                            break;
+                        case "-silent":
+                            IsSilent = true;
                             break;
                         case "-unit":
                             string next = args.Dequeue();
@@ -311,6 +333,9 @@ namespace MemAnalyzer
                         case "-timefmt":
                             TimeFormat = NotAnArg(args.Dequeue());
                             break;
+                        case "-time":
+                            TargetInformation.ExternalTime = NotAnArg(args.Dequeue());
+                            break;
                         case "-context":
                             Context = NotAnArg(args.Dequeue());
                             break;
@@ -397,8 +422,6 @@ namespace MemAnalyzer
                 {
                     OutputStringWriter.CsvOutput = true;
                     OutputStringWriter.DisableExcelCSVSep = DisableExcelCSVSep;
-                    FileStream file = new FileStream(OutFile, (OverWriteOutFile || TargetInformation.IsProcessCompare) ? FileMode.Create : FileMode.Append);
-                    OutputStringWriter.Output = new StreamWriter(file);
                     var info = new FileInfo(OutFile);
 
                     // skip header if file has already content
@@ -408,10 +431,13 @@ namespace MemAnalyzer
                     }
 
                     // when child process is spawned do not print the same message twice
-                    if (!IsChild)
+                    if (!IsChild && !IsSilent)
                     {
-                        Console.WriteLine($"Writing output to csv file {OutFile}");
+                        Console.WriteLine($"Writing output to csv file {OutFile}. {(OverWriteOutFile || !info.Exists ? "" : "File contents are appended.")}");
                     }
+
+                    FileStream file = new FileStream(OutFile, (OverWriteOutFile || TargetInformation.IsProcessCompare) ? FileMode.Create : FileMode.Append);
+                    OutputStringWriter.Output = new StreamWriter(file);
                 }
                 analyzer = CreateAnalyzer(Action);
 
@@ -553,6 +579,9 @@ namespace MemAnalyzer
                 RedirectStandardOutput = true
             };
             var p = Process.Start(info);
+
+            Console.CancelKeyPress += (a, b) => p.Kill();
+
             string output = null;
             while( (output =  p.StandardOutput.ReadLine()) != null )
             {

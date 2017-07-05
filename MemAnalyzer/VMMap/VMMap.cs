@@ -93,7 +93,7 @@ namespace MemAnalyzer
         /// <param name="outFile"></param>
         public static void SaveVMmapDataToFile(int pid, string outFile)
         {
-            var info = new ProcessStartInfo(VmMap, $"-p {pid} {outFile}")
+            var info = new ProcessStartInfo(VmMap, $"-accepteula -p {pid} {outFile}")
             {
                 CreateNoWindow = true,
                 WindowStyle = ProcessWindowStyle.Hidden,

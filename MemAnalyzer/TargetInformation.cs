@@ -15,7 +15,7 @@ namespace MemAnalyzer
     class TargetInformation
     {
         /// <summary>
-        /// Optional rename for 
+        /// Optional rename for processes with given command line. Used for CSV output to get time series with descriptive process names.
         /// </summary>
         public ProcessRenamer Renamer { get; set; }
 
@@ -23,6 +23,13 @@ namespace MemAnalyzer
         public string DumpFileName1 { get; set; }
         public int Pid2 { get; set; }
         public string DumpFileName2 { get; set; }
+
+        /// <summary>
+        /// For CSV output we use the current time. But if MemAnalyzer is used from an external script to dump several processes
+        /// at one time we will get distinct times in the CSV output which makes it harder to group all processes from one snapshot 
+        /// together in Excel Charts to get a trend over time between snapshots of a collection of processes.
+        /// </summary>
+        public string ExternalTime { get; set; }
 
         public const string VMMapPostFix = "_VMMap.csv";
 
@@ -199,7 +206,10 @@ namespace MemAnalyzer
             else if (!File.Exists(processRenameFile))
             {
                 Renamer = new ProcessRenamer();
-                Console.WriteLine($"Warning: Process rename file {processRenameFile} was not found!");
+                if (!Program.IsChild)
+                {
+                    Console.WriteLine($"Warning: Process rename file {processRenameFile} was not found!");
+                }
             }
             else
             {

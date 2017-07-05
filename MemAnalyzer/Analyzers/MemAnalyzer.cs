@@ -65,7 +65,7 @@ namespace MemAnalyzer
             ProcessName = TargetInfo.IsLiveProcess? TargetInformation.GetProcessName(TargetInfo.Pid1) : "";
             CmdLine = TargetInfo.IsLiveProcess ? TargetInformation.GetProcessCmdLine(TargetInfo.Pid1) : "";
             DateTime now = TargetInfo.CurrentTimeOrDumpCreationDate;
-            TimeAndOrDate = timeFormat == "Invariant" ? now.ToString(CultureInfo.InvariantCulture) : now.ToString(timeFormat);
+            TimeAndOrDate = TargetInfo.ExternalTime != null ? TargetInfo.ExternalTime : timeFormat == "Invariant" ? now.ToString(CultureInfo.InvariantCulture) : now.ToString(timeFormat);
             Context = context;
         }
 
