@@ -6,6 +6,7 @@ It can show which objects use most space on the managed heap just like !DumpHeap
 
 - Single self contained executable
 - Supports x86 and x64 processes and memory dumps
+- .NET Core x86 and x64 support
 - Create memory dumps with associated VMMap data
 - Analyze managed heap, unmanaged, private bytes and file mappings when VMMap is present.
 - Memory dump diff
