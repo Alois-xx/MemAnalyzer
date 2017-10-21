@@ -84,6 +84,12 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Analyzers\Data\ObjectStatistics.cs" />
+    <Compile Include="Analyzers\Data\ProcessContextInfo.cs" />
+    <Compile Include="Analyzers\Data\ProcessTypeInfo.cs" />
+    <Compile Include="Analyzers\Data\StringDiff.cs" />
+    <Compile Include="Analyzers\Data\TypeInfo.cs" />
+    <Compile Include="Analyzers\Data\TypeInfoDiff.cs" />
     <Compile Include="AppDomainResolverFromResources.cs" />
     <Compile Include="ArgNotExpectedException.cs" />
     <Compile Include="Binaries.Designer.cs">
@@ -91,6 +97,7 @@
       <DesignTime>True</DesignTime>
       <DependentUpon>Binaries.resx</DependentUpon>
     </Compile>
+    <Compile Include="CSVReader.cs" />
     <Compile Include="DebugPrinter.cs" />
     <Compile Include="ProcessHelper\DumpCreator.cs" />
     <Compile Include="Analyzers\InternalExtensions.cs" />
@@ -105,11 +112,12 @@
     <Compile Include="OutputStringWriter.cs" />
     <Compile Include="Analyzers\StringStatisticsCommand.cs" />
     <Compile Include="TargetInformation.cs" />
-    <Compile Include="Analyzers\TypeDiffStatistics.cs" />
-    <Compile Include="Analyzers\TypeInstance.cs" />
-    <Compile Include="Analyzers\DisplayUnit.cs" />
+    <Compile Include="Analyzers\Data\TypeDiffStatistics.cs" />
+    <Compile Include="Analyzers\Data\TypeInstance.cs" />
+    <Compile Include="Analyzers\Data\DisplayUnit.cs" />
     <Compile Include="VMMap\VMMapData.cs" />
     <Compile Include="VMMap\VMMap.cs" />
+    <Compile Include="VMMap\VMMapProcessData.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />

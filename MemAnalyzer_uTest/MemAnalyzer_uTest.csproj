@@ -67,6 +67,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="CSVReaderTests.cs" />
     <Compile Include="DumpCreatorTests.cs" />
     <Compile Include="MemAnalyzerTests.cs" />
     <Compile Include="OutputStringWriterTests.cs" />
@@ -79,6 +80,12 @@
     <Content Include="Dumps\vmmap.csv">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+    <None Include="Dumps\devenv_DumpHeap_Live.csv">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="Dumps\devenv_DumpHeap_Live_WithVMMap.csv">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>

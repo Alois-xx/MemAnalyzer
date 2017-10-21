@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -11,6 +10,20 @@ namespace MemAnalyzer
     /// </summary>
     class VMMapData
     {
+        /// <summary>
+        /// Row names in output. Rows with a ! in their name are not aggregated values
+        /// which makes it easy to filter for them in Pivot Charts with ! as text filter
+        /// </summary>
+        internal const string Col_Reserved_LargestFreeBlock = "Reserved_LargestFreeBlock";
+        internal const string Col_Reserved_Stack = "Reserved_Stack";
+        internal const string Col_Committed_Dll = "Committed_Dll";
+        internal const string Col_Committed_Heap = "Committed_Heap!";
+        internal const string Col_Committed_MappedFile = "Committed_MappedFile!";
+        internal const string Col_Committed_Private = "Committed_Private!";
+        internal const string Col_Committed_Shareable = "Committed_Shareable!";
+        internal const string Col_Committed_Total = "Committed_Total";
+
+
         public int Pid;
 
         public long Reserved_DllBytes;
@@ -73,28 +86,37 @@ namespace MemAnalyzer
         /// <returns></returns>
         public static VMMapData operator -(VMMapData x, VMMapData y)
         {
-            var lret = new VMMapData();
+            var lret = new VMMapData
+            {
+                Committed_DllBytes = x.Committed_DllBytes - y.Committed_DllBytes,
+                Committed_HeapBytes = x.Committed_HeapBytes - y.Committed_HeapBytes,
+                Committed_ManagedHeapBytes = x.Committed_ManagedHeapBytes - y.Committed_ManagedHeapBytes,
+                Committed_MappedFileBytes = x.Committed_MappedFileBytes - y.Committed_MappedFileBytes,
+                Committed_PageTable = x.Committed_PageTable - y.Committed_PageTable,
+                Committed_PrivateBytes = x.Committed_PrivateBytes - y.Committed_PrivateBytes,
+                Committed_ShareableBytes = x.Committed_ShareableBytes - y.Committed_ShareableBytes,
+                Committed_Stack = x.Committed_Stack - y.Committed_Stack,
 
-            lret.Committed_DllBytes = x.Committed_DllBytes - y.Committed_DllBytes;
-            lret.Committed_HeapBytes = x.Committed_HeapBytes - y.Committed_HeapBytes;
-            lret.Committed_ManagedHeapBytes = x.Committed_ManagedHeapBytes - y.Committed_ManagedHeapBytes;
-            lret.Committed_MappedFileBytes = x.Committed_MappedFileBytes - y.Committed_MappedFileBytes;
-            lret.Committed_PageTable = x.Committed_PageTable - y.Committed_PageTable;
-            lret.Committed_PrivateBytes = x.Committed_PrivateBytes - y.Committed_PrivateBytes;
-            lret.Committed_ShareableBytes = x.Committed_ShareableBytes - y.Committed_ShareableBytes;
-            lret.Committed_Stack = x.Committed_Stack - y.Committed_Stack;
-
-            lret.LargestFreeBlockBytes = x.LargestFreeBlockBytes - y.LargestFreeBlockBytes;
-            lret.Reserved_DllBytes = x.Reserved_DllBytes - y.Reserved_DllBytes;
-            lret.Reserved_HeapBytes = x.Reserved_HeapBytes - y.Reserved_HeapBytes;
-            lret.Reserved_ManagedHeapBytes = x.Reserved_ManagedHeapBytes - y.Reserved_ManagedHeapBytes;
-            lret.Reserved_MappedFileBytes = x.Reserved_MappedFileBytes - y.Reserved_MappedFileBytes;
-            lret.Reserved_PageTable = x.Reserved_PageTable - y.Reserved_PageTable;
-            lret.Reserved_PrivateBytes = x.Reserved_PrivateBytes - y.Reserved_PrivateBytes;
-            lret.Reserved_ShareableBytes = x.Reserved_ShareableBytes - y.Reserved_ShareableBytes;
-            lret.Reserved_Stack = x.Reserved_Stack - y.Reserved_Stack;
+                LargestFreeBlockBytes = x.LargestFreeBlockBytes - y.LargestFreeBlockBytes,
+                Reserved_DllBytes = x.Reserved_DllBytes - y.Reserved_DllBytes,
+                Reserved_HeapBytes = x.Reserved_HeapBytes - y.Reserved_HeapBytes,
+                Reserved_ManagedHeapBytes = x.Reserved_ManagedHeapBytes - y.Reserved_ManagedHeapBytes,
+                Reserved_MappedFileBytes = x.Reserved_MappedFileBytes - y.Reserved_MappedFileBytes,
+                Reserved_PageTable = x.Reserved_PageTable - y.Reserved_PageTable,
+                Reserved_PrivateBytes = x.Reserved_PrivateBytes - y.Reserved_PrivateBytes,
+                Reserved_ShareableBytes = x.Reserved_ShareableBytes - y.Reserved_ShareableBytes,
+                Reserved_Stack = x.Reserved_Stack - y.Reserved_Stack
+            };
 
             return lret;
+        }
+
+        /// <summary>
+        /// If during deserialization from CSV file no data was present this is the way to check it.
+        /// </summary>
+        public bool IsEmpty
+        {
+            get => Committed_DllBytes == 0;
         }
     }
 }

@@ -28,23 +28,28 @@ namespace MemAnalyzer
         bool IsFirstLine = true;
 
 
-        /// <summary>
-        /// Row names in output. Rows with a ! in their name are not aggregated values
-        /// which makes it easy to filter for them in Pivot Charts with ! as text filter
-        /// </summary>
-        const string Reserved_LargestFreeBlock = "Reserved_LargestFreeBlock";
-        const string Reserved_Stack = "Reserved_Stack";
-        const string Committed_Dll = "Committed_Dll";
-        const string Committed_Heap = "Committed_Heap!";
-        const string Committed_MappedFile = "Committed_MappedFile!";
-        const string Committed_Private = "Committed_Private!";
-        const string Committed_Shareable = "Committed_Shareable!";
-        const string Committed_Total = "Committed_Total";
-        const string ManagedHeapSize = "Managed Heap(TotalSize)";
-        const string ManagedHeapFree = "Managed Heap(Free)!";
-        const string ManagedHeapAllocated = "Managed Heap(Allocated)!";
-        const string AllocatedTotal = "Allocated(Total)";
 
+
+        // Other memory rows
+        internal const string ManagedHeapSize = "Managed Heap(TotalSize)";
+        internal const string ManagedHeapFree = "Managed Heap(Free)!";
+        internal const string ManagedHeapAllocated = "Managed Heap(Allocated)!";
+        internal const string AllocatedTotal = "Allocated(Total)";
+
+        // Column Names
+        internal const string AllocatedColumnBase = "Allocated";  // This one gets the DisplayUnit appended. Can be Bytes, KB, MB, GB
+        internal const string AllocatedBytesColumn = AllocatedColumnBase + "Bytes";
+        internal const string AllocatedKBColumn    = AllocatedColumnBase + "KB";
+        internal const string AllocatedMBColumn    = AllocatedColumnBase + "MB";
+        internal const string AllocatedGBColumn    = AllocatedColumnBase + "GB";
+        internal const string           InstancesColumn      = "Instances(Count)";
+        internal const string           TypeColumn           = "Type";
+        internal const string           ProcessIdColumn      = "ProcessId";
+        internal const string           TimeColumn           = "Time";
+        internal const string           CommandeLineColumn   = "CommandLine";
+        internal const string           AgeColumn            = "Age(s)";
+        internal const string           NameColumn           = "Name";
+        internal const string           ContextColumn        = "Context";
 
         /// <summary>
         /// Construct a memory analyzer
@@ -65,7 +70,7 @@ namespace MemAnalyzer
             ProcessName = TargetInfo.IsLiveProcess? TargetInformation.GetProcessName(TargetInfo.Pid1) : "";
             CmdLine = TargetInfo.IsLiveProcess ? TargetInformation.GetProcessCmdLine(TargetInfo.Pid1) : "";
             DateTime now = TargetInfo.CurrentTimeOrDumpCreationDate;
-            TimeAndOrDate = TargetInfo.ExternalTime != null ? TargetInfo.ExternalTime : timeFormat == "Invariant" ? now.ToString(CultureInfo.InvariantCulture) : now.ToString(timeFormat);
+            TimeAndOrDate = TargetInfo.ExternalTime ?? (timeFormat == "Invariant" ? now.ToString(CultureInfo.InvariantCulture) : now.ToString(timeFormat));
             Context = context;
         }
 
@@ -123,11 +128,11 @@ namespace MemAnalyzer
 
             if (IsFirstLine)
             {
-                string[] header = new string[] { "Allocated" + DisplayUnit, "Instances(Count)", "Type" };
+                string[] header = new string[] { AllocatedColumnBase + DisplayUnit, InstancesColumn, TypeColumn };
 
                 if (OutputStringWriter.CsvOutput)
                 {
-                    header = header.Concat(new string[] { "ProcessId", "Time", "CommandLine", "Age(s)", "Name", "Context" }).ToArray();
+                    header = header.Concat(new string[] { ProcessIdColumn, TimeColumn, CommandeLineColumn, AgeColumn, NameColumn, ContextColumn }).ToArray();
                 }
 
                 // write header
@@ -283,8 +288,7 @@ namespace MemAnalyzer
                 Dictionary<string, TypeInfo> infos = new Dictionary<string, TypeInfo>();
                 foreach (var stat in stats)
                 {
-                    TypeInfo info = null;
-                    if (!infos.TryGetValue(stat.Key.Name, out info))
+                    if (!infos.TryGetValue(stat.Key.Name, out TypeInfo info))
                     {
                         info = new TypeInfo { Name = stat.Key.Name };
                         infos[stat.Key.Name] = info;
@@ -305,7 +309,7 @@ namespace MemAnalyzer
         }
 
 
-        TypeDiffStatistics GetDiffStatistics(List<TypeInfo> typeInfos, List<TypeInfo> typeInfos2, bool orderBySize)
+        static TypeDiffStatistics GetDiffStatistics(List<TypeInfo> typeInfos, List<TypeInfo> typeInfos2, bool orderBySize)
         {
             HashSet<string> commonTypes = new HashSet<string>(typeInfos.Select(x => x.Name).Concat(typeInfos2.Select(x => x.Name)));
             var typeInfosDict = typeInfos.ToDictionary(x => x.Name);
@@ -314,11 +318,8 @@ namespace MemAnalyzer
             List<TypeInfoDiff> diffs = new List<TypeInfoDiff>();
             foreach (var type in commonTypes)
             {
-                TypeInfo info = null;
-                TypeInfo info2 = null;
-
-                typeInfosDict.TryGetValue(type, out info);
-                typeInfosDict2.TryGetValue(type, out info2);
+                typeInfosDict.TryGetValue(type, out TypeInfo info);
+                typeInfosDict2.TryGetValue(type, out TypeInfo info2);
 
                 diffs.Add(new TypeInfoDiff
                 {
@@ -365,15 +366,15 @@ namespace MemAnalyzer
             // free blocks only play a role in x86 
             if (vm.LargestFreeBlockBytes < 4 * 1024 * 1024 * 1024L)
             {
-                formatter(Reserved_LargestFreeBlock, vm.LargestFreeBlockBytes);
+                formatter(VMMapData.Col_Reserved_LargestFreeBlock, vm.LargestFreeBlockBytes);
             }
-            formatter(Reserved_Stack, vm.Reserved_Stack);
-            formatter(Committed_Dll, vm.Committed_DllBytes);
-            formatter(Committed_Heap, vm.Committed_HeapBytes);
-            formatter(Committed_MappedFile, vm.Committed_MappedFileBytes);
-            formatter(Committed_Private, vm.Committed_PrivateBytes);
-            formatter(Committed_Shareable, vm.Committed_ShareableBytes);
-            formatter(Committed_Total, vm.TotalCommittedBytes);
+            formatter(VMMapData.Col_Reserved_Stack, vm.Reserved_Stack);
+            formatter(VMMapData.Col_Committed_Dll, vm.Committed_DllBytes);
+            formatter(VMMapData.Col_Committed_Heap, vm.Committed_HeapBytes);
+            formatter(VMMapData.Col_Committed_MappedFile, vm.Committed_MappedFileBytes);
+            formatter(VMMapData.Col_Committed_Private, vm.Committed_PrivateBytes);
+            formatter(VMMapData.Col_Committed_Shareable, vm.Committed_ShareableBytes);
+            formatter(VMMapData.Col_Committed_Total, vm.TotalCommittedBytes);
         }
 
         /// <summary>
@@ -383,19 +384,19 @@ namespace MemAnalyzer
         /// <param name="vm"></param>
         void WriteVMMapDataDiff(Action<string, long, long, long> formatter, VMMapData vm, VMMapData vm2, VMMapData diff)
         {
-            formatter(Reserved_Stack, diff.Reserved_Stack, vm.Reserved_Stack, vm2.Reserved_Stack);
+            formatter(VMMapData.Col_Reserved_Stack, diff.Reserved_Stack, vm.Reserved_Stack, vm2.Reserved_Stack);
             // free blocks only play a role in x86 
             if (vm.LargestFreeBlockBytes < 4 * 1024 * 1024 * 1024L)
             {
-                formatter(Reserved_LargestFreeBlock, diff.LargestFreeBlockBytes, vm.LargestFreeBlockBytes, vm2.LargestFreeBlockBytes);
+                formatter(VMMapData.Col_Reserved_LargestFreeBlock, diff.LargestFreeBlockBytes, vm.LargestFreeBlockBytes, vm2.LargestFreeBlockBytes);
             }
 
-            formatter(Committed_Dll, diff.Committed_DllBytes, vm.Committed_DllBytes, vm2.Committed_DllBytes);
-            formatter(Committed_Heap, diff.Committed_HeapBytes, vm.Committed_HeapBytes, vm2.Committed_HeapBytes);
-            formatter(Committed_MappedFile, diff.Committed_MappedFileBytes, vm.Committed_MappedFileBytes, vm2.Committed_MappedFileBytes);
-            formatter(Committed_Private, diff.Committed_PrivateBytes, vm.Committed_PrivateBytes, vm2.Committed_PrivateBytes);
-            formatter(Committed_Shareable, diff.Committed_ShareableBytes, vm.Committed_ShareableBytes, vm2.Committed_ShareableBytes);
-            formatter(Committed_Total, diff.TotalCommittedBytes, vm.TotalCommittedBytes, vm2.TotalCommittedBytes);
+            formatter(VMMapData.Col_Committed_Dll, diff.Committed_DllBytes, vm.Committed_DllBytes, vm2.Committed_DllBytes);
+            formatter(VMMapData.Col_Committed_Heap, diff.Committed_HeapBytes, vm.Committed_HeapBytes, vm2.Committed_HeapBytes);
+            formatter(VMMapData.Col_Committed_MappedFile, diff.Committed_MappedFileBytes, vm.Committed_MappedFileBytes, vm2.Committed_MappedFileBytes);
+            formatter(VMMapData.Col_Committed_Private, diff.Committed_PrivateBytes, vm.Committed_PrivateBytes, vm2.Committed_PrivateBytes);
+            formatter(VMMapData.Col_Committed_Shareable, diff.Committed_ShareableBytes, vm.Committed_ShareableBytes, vm2.Committed_ShareableBytes);
+            formatter(VMMapData.Col_Committed_Total, diff.TotalCommittedBytes, vm.TotalCommittedBytes, vm2.TotalCommittedBytes);
         }
 
         /// <summary>
@@ -429,6 +430,13 @@ namespace MemAnalyzer
         }
 
 
+        /// <summary>
+        /// Get VMMap data from process
+        /// </summary>
+        /// <param name="bFirstProcess"></param>
+        /// <param name="targetInfo"></param>
+        /// <param name="heap"></param>
+        /// <returns></returns>
         private static VMMapData GetVMMapDataFromProcess(bool bFirstProcess, TargetInformation targetInfo, ClrHeap heap)
         {
             int pid = bFirstProcess ? targetInfo.Pid1 : targetInfo.Pid2;
@@ -438,7 +446,7 @@ namespace MemAnalyzer
             {
                 // we must first detach CLRMD or VMMAp will block at least in x64 in the target process to get heap information.
                 // Play safe and do not try this asynchronously.
-                heap.Runtime.DataTarget.Dispose();
+                heap?.Runtime?.DataTarget?.Dispose();
                 data = StartVMMap(pid, null);
             }
             else

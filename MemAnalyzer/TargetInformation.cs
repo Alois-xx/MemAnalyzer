@@ -24,6 +24,14 @@ namespace MemAnalyzer
         public int Pid2 { get; set; }
         public string DumpFileName2 { get; set; }
 
+        public const string CSVExtension = ".csv";
+
+        bool IsCsvFile(string fileName)
+        {
+            return Path.GetExtension(fileName).ToLower() == CSVExtension;
+        }
+
+
         /// <summary>
         /// For CSV output we use the current time. But if MemAnalyzer is used from an external script to dump several processes
         /// at one time we will get distinct times in the CSV output which makes it harder to group all processes from one snapshot 
