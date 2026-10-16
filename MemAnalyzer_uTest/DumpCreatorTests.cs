@@ -1,5 +1,4 @@
 ﻿using MemAnalyzer;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -7,17 +6,17 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Xunit;
 
 namespace MemAnalyzer_uTest
 {
-    [TestClass]
     public class DumpCreatorTests
     {
         const string StringAllocExe = "StringAllocatorx86.exe";
         string dumpFileName = "test.dmp";
 
-        [TestInitialize]
-        public void CleanDump()
+        // xunit runs the constructor before every test (replaces [TestInitialize])
+        public DumpCreatorTests()
         {
             if( File.Exists(dumpFileName) )
             {
@@ -33,69 +32,70 @@ namespace MemAnalyzer_uTest
             Program.IsDebug = true;
         }
 
-        [TestMethod]
+        [Fact]
         public void Can_Dump_Process()
         {
             DumpCreator creator = new DumpCreator(true,false);
             var process = AllocStrings();
 
             string file = creator.Dump(new string[] { process.Id.ToString(), "test.dmp" });
-            Assert.IsNotNull(file, "Output dump file was null!");
-            Assert.IsTrue(File.Exists(file), "Dump file does not exist!");
-            Assert.IsNotNull(TargetInformation.GetExistingVMMapFile(file), "Associated VMMap dump file was not found. Is VMMap.exe in path?");
+            Assert.NotNull(file);
+            Assert.True(File.Exists(file), "Dump file does not exist!");
+            string associatedVmmap = TargetInformation.GetExistingVMMapFile(file);
+            Assert.True(associatedVmmap != null, "Associated VMMap dump file was not found. Is VMMap.exe in path?");
         }
 
-        [TestMethod]
+        [Fact]
         public void Can_Parse_RegularPid()
         {
             string[] args = new string[] { "-ma", "5000" };
             int pid = DumpCreator.FindPidInProcDumpArgs(args, out string exeName);
-            Assert.AreEqual(5000, pid);
+            Assert.Equal(5000, pid);
         }
 
-        [TestMethod]
+        [Fact]
         public void IfExeAndDumpFile_Present_Ignore_Dump()
         {
             string[] args = new string[] { "-ma", "notepad", "notepad.dmp" };
             int pid = DumpCreator.FindPidInProcDumpArgs(args, out string exeName);
-            Assert.AreEqual("notepad", exeName);
+            Assert.Equal("notepad", exeName);
         }
 
-        [TestMethod]
+        [Fact]
         public void ExeFilePresent_DumpFileNot()
         {
             string[] args = new string[] { "-ma", "notepad" };
             int pid = DumpCreator.FindPidInProcDumpArgs(args, out string exeName);
-            Assert.AreEqual("notepad", exeName);
+            Assert.Equal("notepad", exeName);
         }
 
 
-        [TestMethod]
+        [Fact]
         public void Can_Parse_RegularexeName()
         {
             string[] args = new string[] { "-ma", "notepad.exe" };
             int pid = DumpCreator.FindPidInProcDumpArgs(args, out string exeName);
-            Assert.AreEqual(0, pid);
-            Assert.AreEqual("notepad.exe", exeName);
+            Assert.Equal(0, pid);
+            Assert.Equal("notepad.exe", exeName);
         }
 
-        [TestMethod]
+        [Fact]
         public void Can_Parse_RegularexeNameSecondLast()
         {
             string[] args = new string[] { "notepad.exe", "-ma" };
             int pid = DumpCreator.FindPidInProcDumpArgs(args, out string exeName);
-            Assert.AreEqual(0, pid);
-            Assert.AreEqual("notepad.exe", exeName);
+            Assert.Equal(0, pid);
+            Assert.Equal("notepad.exe", exeName);
         }
 
 
 
-        [TestMethod]
+        [Fact]
         public void Can_Parse_SinglePidArg()
         {
             string[] args = new string[] { "5000" };
             int pid = DumpCreator.FindPidInProcDumpArgs(args, out string exeName);
-            Assert.AreEqual(5000, pid);
+            Assert.Equal(5000, pid);
         }
 
 

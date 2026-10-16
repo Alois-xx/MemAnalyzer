@@ -1,41 +1,40 @@
 ﻿using System;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
 using MemAnalyzer;
 using System.IO;
 using System.Text;
+using Xunit;
 
 namespace MemAnalyzer_uTest
 {
-    [TestClass]
     public class OutputStringWriterTests
     {
-        [TestMethod]
+        [Fact]
         public void Throw_On_Null_Fmt()
         {
-            Assert.ThrowsException<ArgumentNullException>(() => OutputStringWriter.Format(null, " "));
+            Assert.Throws<ArgumentNullException>(() => OutputStringWriter.Format(null, " "));
         }
 
-        [TestMethod]
+        [Fact]
         public void Use_StringFormat_As_Default()
         {
             const string fmt = "{0:N0} {1:N0}";
             const int Million = 1000 * 1000;
             string millionFormatted = String.Format(fmt, Million, Million);
             OutputStringWriter.CsvOutput = false;
-            Assert.AreEqual(millionFormatted, OutputStringWriter.Format(fmt, Million, Million));
+            Assert.Equal(millionFormatted, OutputStringWriter.Format(fmt, Million, Million));
         }
 
-        [TestMethod]
+        [Fact]
         public void Separate_Columns_By_Tabs_When_CSV_Output_Enabled()
         {
             const string fmt = "{0:N0} {1:N0}";
             const int Million = 1000 * 1000;
             string millionFormatted = String.Format(fmt, Million, Million);
             OutputStringWriter.CsvOutput = true;
-            Assert.AreEqual("1000000\t1000000", OutputStringWriter.Format(fmt, Million, Million));
+            Assert.Equal("1000000\t1000000", OutputStringWriter.Format(fmt, Million, Million));
         }
 
-        [TestMethod]
+        [Fact]
         public void Can_Write_To_File()
         {
             MemoryStream stream = new MemoryStream();
@@ -47,7 +46,7 @@ namespace MemAnalyzer_uTest
             }
 
             string output = Encoding.UTF8.GetString(stream.ToArray());
-            Assert.AreEqual("1,2"+Environment.NewLine, output);
+            Assert.Equal("1,2"+Environment.NewLine, output);
 
 
             stream = new MemoryStream();
@@ -58,7 +57,7 @@ namespace MemAnalyzer_uTest
             }
 
             string output2 = Encoding.UTF8.GetString(stream.ToArray());
-            Assert.AreEqual("3,4" + Environment.NewLine, output2);
+            Assert.Equal("3,4" + Environment.NewLine, output2);
 
         }
     }
