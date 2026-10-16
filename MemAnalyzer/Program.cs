@@ -174,7 +174,6 @@ namespace MemAnalyzer
         {
             try
             {
-                AppDomainResolverFromResources resolver = new AppDomainResolverFromResources(typeof(Binaries));
                 var p = new Program(args);
                 if (p.Parse())
                 {
@@ -514,7 +513,7 @@ namespace MemAnalyzer
             try
             {
                 runtime = clrVersion.CreateRuntime();
-                return runtime.GetHeap();
+                return runtime.Heap;
             }
             catch (Exception ex)
             {
@@ -553,21 +552,15 @@ namespace MemAnalyzer
                 OutputStringWriter.CsvOutput = false;
             }
 
+            // The x64 executable is expected to be deployed side by side with this executable (see build.cmd which
+            // builds both bitnesses into one folder). No embedded binaries are unpacked anymore.
             string exe = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "MemAnalyzerx64.exe");
-
-            // if -debug is specified do not deploy the exe into AppData. Instead start it from the location where where the main exe is located
-            if( !IsDebug )
-            {
-                string appDir = GetToolDeployDirectory();
-                Directory.CreateDirectory(appDir);
-                exe = Path.Combine(appDir, "MemAnalyzerx64.exe");
-            }
 
             if (!File.Exists(exe))
             {
-                File.WriteAllBytes(exe, Binaries.MemAnalyzerx64);
-                // Deploy app.config
-                File.WriteAllText(exe + ".config", Binaries.App);
+                Console.WriteLine($"Error: {exe} was not found next to {Path.GetFileName(Assembly.GetEntryAssembly().Location)}.");
+                Console.WriteLine("       Deploy MemAnalyzerx64.exe into the same folder (build.cmd builds both bitnesses into one folder) or run MemAnalyzerx64.exe directly.");
+                return;
             }
 
             DebugPrinter.Write("Starting x64 child {0}", exe);
@@ -592,33 +585,24 @@ namespace MemAnalyzer
             ReturnCode = p.ExitCode;
         }
 
-        internal static string GetToolDeployDirectory()
-        {
-            return Environment.ExpandEnvironmentVariables($"%AppData%\\MemAnalyzer\\{Assembly.GetExecutingAssembly().GetName().Version}");
-        }
-
         MemAnalyzerBase CreateAnalyzer(Actions action)
         {
             ClrHeap heap = null;
             ClrHeap heap2 = null;
 
-            // If only one dump file is opened then we can open the file with the debugger interface which only supports
-            // one reader in one process. This is useful because otherwise we will lock the file and ClrMD will error 
-            // out if the dump file already open within a debugger which is pretty common.
-            // But the drawback is that if we compare a live process against a memory dump it will fail and we get 
-            // always a diff of 0 back!
-            var crashDumpOpenMode = TargetInformation.IsProcessCompare ? CrashDumpReader.ClrMD : CrashDumpReader.DbgEng;
+            // ClrMD 4.x reads dumps with its own reader and opens dump files with FileShare.ReadWrite,
+            // so a dump file which is currently opened by a debugger can still be analyzed.
 
             try
             {
                 if (TargetInformation.DumpFileName1 != null)
                 {
-                    Target = DataTarget.LoadCrashDump(TargetInformation.DumpFileName1, crashDumpOpenMode);
+                    Target = DataTarget.LoadDump(TargetInformation.DumpFileName1);
                     heap = GetHeap(Target);
                 }
                 if (TargetInformation.DumpFileName2 != null)
                 {
-                    Target2 = DataTarget.LoadCrashDump(TargetInformation.DumpFileName2, crashDumpOpenMode);
+                    Target2 = DataTarget.LoadDump(TargetInformation.DumpFileName2);
                     heap2 = GetHeap(Target2);
                 }
 
@@ -638,7 +622,7 @@ namespace MemAnalyzer
                         return null;
                     }
 
-                    Target = DataTarget.AttachToProcess(TargetInformation.Pid1, 5000u);
+                    Target = DataTarget.AttachToProcess(TargetInformation.Pid1, suspend: true);
                     heap = GetHeap(Target);
                     if (heap == null)
                     {
@@ -669,7 +653,7 @@ namespace MemAnalyzer
                         return null;
                     }
 
-                    Target2 = DataTarget.AttachToProcess(TargetInformation.Pid2, 5000u);
+                    Target2 = DataTarget.AttachToProcess(TargetInformation.Pid2, suspend: true);
                     heap2 = GetHeap(Target2);
                 }
             }

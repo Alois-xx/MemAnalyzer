@@ -34,7 +34,7 @@ namespace MemAnalyzer
                 var type = heap.GetObjectType(instance);
                 if (type != null && type.IsString)
                 {
-                    var value = (string)type.GetValue(instance);
+                    var value = heap.GetObject(instance).AsString(int.MaxValue);
                     ObjectStatistics countAndSize = null;
                     if (stringUsages.TryGetValue(value, out countAndSize))
                     {
@@ -42,7 +42,7 @@ namespace MemAnalyzer
                     }
                     else
                     {
-                        var size = type.GetSize(instance);
+                        var size = heap.GetObject(instance).Size;
                         stringUsages[value] = new ObjectStatistics { SizePerInstance = (long) size, InstanceCount = 1, SampleAddress = instance };
                     }
                 }

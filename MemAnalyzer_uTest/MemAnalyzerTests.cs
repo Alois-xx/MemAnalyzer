@@ -63,17 +63,6 @@ namespace MemAnalyzer_uTest
         /// <returns></returns>
         int StartMemAnalyzer(string args, out string output)
         {
-            string dir = Program.GetToolDeployDirectory();
-            // delete old baseline which is deployed there. Otherwise we might test for x64 targets 
-            // an old version.
-            if( Directory.Exists(dir))
-            {
-                foreach(var file in Directory.GetFiles(dir, "*.*"))
-                {
-                    File.Delete(file);
-                }
-            }
-
             var info = new ProcessStartInfo("MemAnalyzer.exe", args)
             {
                 CreateNoWindow = true,

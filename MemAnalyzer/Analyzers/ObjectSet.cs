@@ -28,7 +28,7 @@ namespace MemAnalyzer
         public ObjectSet(ClrHeap heap)
         {
             m_shift = IntPtr.Size == 4 ? 3 : 4;
-            int count = heap.Segments.Count;
+            int count = heap.Segments.Length;
 
             m_data = new BitArray[count];
             m_entries = new Entry[count];

@@ -38,11 +38,11 @@ namespace MemAnalyzer
                 List<ulong> live = new List<ulong>();
                 foreach (ClrSegment seg in heap.Segments)
                 {
-                    for (ulong obj = seg.FirstObject; obj != 0; obj = seg.NextObject(obj))
+                    foreach (ClrObject obj in seg.EnumerateObjects(carefully: true))
                     {
-                        if (liveObjects.Contains(obj))
+                        if (liveObjects.Contains(obj.Address))
                         {
-                            live.Add(obj);
+                            live.Add(obj.Address);
                         }
                     }
                 }
@@ -50,7 +50,7 @@ namespace MemAnalyzer
             }
             else
             {
-                return heap.EnumerateObjectAddresses();
+                return heap.EnumerateObjects().Select(o => o.Address);
             }
         }
 
@@ -80,11 +80,11 @@ namespace MemAnalyzer
                 if (type == null)  // Only if heap corruption
                     continue;
 
-                type.EnumerateRefsOfObjectCarefully(obj, delegate (ulong child, int offset)
+                foreach (ulong child in heap.GetObject(obj).EnumerateReferenceAddresses(carefully: true))
                 {
                     if (child != 0 && !considered.Contains(child))
                         eval.Push(child);
-                });
+                }
             }
 
             return considered;
@@ -131,17 +131,17 @@ namespace MemAnalyzer
                     continue;
 
                 count++;
-                size += type.GetSize(obj);
+                size += heap.GetObject(obj).Size;
 
                 // Now enumerate all objects that this object points to, add them to the
                 // evaluation stack if we haven't seen them before.
-                type.EnumerateRefsOfObject(obj, delegate (ulong child, int offset)
+                foreach (ulong child in heap.GetObject(obj).EnumerateReferenceAddresses(carefully: false))
                 {
                     if (child != 0 && !considered.Contains(child) && !farReachingParents.Contains(child))
                     {
                         eval.Push(child);
                     }
-                });
+                }
             }
         }
 
@@ -163,25 +163,25 @@ namespace MemAnalyzer
             {
                 throw new ArgumentException(String.Format("Field {0} not found in type {1}", fieldName, type.Name));
             }
-            ulong objAdr = fieldType.GetAddress(objAddress, bInner);
-            if (!heap.ReadPointer(objAdr, out objAdr))
+            ClrObject child = fieldType.ReadObject(objAddress, bInner);
+            if (!child.IsValid && !child.IsNull)
             {
                 throw new InvalidOperationException(String.Format("Could not read from address 0x{0:X} which was field {1} in type {2}. Object Address: 0x:{3:X}", objAddress, fieldName, type.Name, objAddress));
             }
-            return new TypeInstance(objAdr, heap.GetObjectType(objAdr));
+            return new TypeInstance(child.Address, child.Type);
         }
 
-        static protected T GetObjectValue<T>(ulong objAddress, ClrType type, string fieldName)
+        static protected T GetObjectValue<T>(ulong objAddress, ClrType type, string fieldName) where T : unmanaged
         {
             var fieldType = type.GetFieldByName(fieldName);
             if (fieldType == null)
             {
                 throw new ArgumentException(String.Format("Could not get field value of object 0x{0:X} for of field {1} of type {2}", objAddress, fieldName, type));
             }
-            return (T)fieldType.GetValue(objAddress);
+            return fieldType.Read<T>(objAddress, interior: false);
         }
 
-        static protected T GetObjectValue<T>(TypeInstance instance, string fieldName)
+        static protected T GetObjectValue<T>(TypeInstance instance, string fieldName) where T : unmanaged
         {
             return GetObjectValue<T>(instance.Address, instance.Type, fieldName);
         }

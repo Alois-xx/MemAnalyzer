@@ -253,3 +253,5 @@ paket-files/
 *.dmp
 *.exe
 *.dll
+# Deployment output of build.cmd
+[Dd]ist/

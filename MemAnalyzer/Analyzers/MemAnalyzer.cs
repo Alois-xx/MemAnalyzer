@@ -295,7 +295,7 @@ namespace MemAnalyzer
                     }
 
                     info.Count++;
-                    info.AllocatedSizeInBytes += (long)stat.Key.GetSize(stat.Value);
+                    info.AllocatedSizeInBytes += (long)heap.GetObject(stat.Value).Size;
                 }
 
                 typeInfos = infos.Values.ToList();
