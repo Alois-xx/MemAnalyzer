@@ -33,7 +33,7 @@ namespace MemAnalyzer
         /// </summary>
         const string DacCollection = "https://1drv.ms/f/s!AhcFq7XO98yJgoMwuPd7LNioVKAp_A";
 
-        static string HelpStr = String.Format("MemAnalyzer {0} by Alois Kraus 2017", Assembly.GetExecutingAssembly().GetName().Version) + Environment.NewLine +
+        static string HelpStr = String.Format("MemAnalyzer {0} by Alois Kraus 2017-2026", Assembly.GetExecutingAssembly().GetName().Version) + Environment.NewLine +
                                 "Usage: " + Environment.NewLine  +
                                 "       MemAnalyzer [ -f DumpFile or -pid ddd [ -f2 DumpFile or -pid2 ddd ] -dts [N] or -dtn [N] or -dstrings [N] [-live] [-unit DisplayUnit] [-vmmap] ] "  + Environment.NewLine + 
                                 "                   [-o Output.csv [-sep \\t] [-noexcelsep] [-time \"externalTime\"]] " + Environment.NewLine +
