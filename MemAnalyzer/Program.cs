@@ -18,6 +18,12 @@ namespace MemAnalyzer
         static int TopN = 20;
 
         /// <summary>
+        /// Set to true when N was explicitly given on the command line.
+        /// When output is written to a file (-o) topN is not applied by default (all entries are written) unless N was set explicitly.
+        /// </summary>
+        static bool TopNExplicit = false;
+
+        /// <summary>
         /// Lower limit when e.g. all objects with a count > MinCount should be included in the output to get smaller relevant output
         /// </summary>
         static int MinCount = 0;
@@ -51,7 +57,7 @@ namespace MemAnalyzer
                                 "       -procdump args       Create a memory dump and VMMap snapshot of a process. Needs procdump.exe and vmmap.exe in the path to work" + Environment.NewLine +
                                 "       -verifydump          Used with -procdump. This checks the managed heap for consistency to be sure that it can be loaded later" + Environment.NewLine +
                                 " CSV Output " + Environment.NewLine +
-                                "       -o output.csv        Write output to csv file instead of console" + Environment.NewLine +
+                                "       -o output.csv        Write output to csv file instead of console. By default all entries are written (topN is not applied); an explicit N for -dts/-dtn/-dstrings still limits the output" + Environment.NewLine +
                                 "       -overwrite           Overwrite CSV output if file already exist. Otherwise it is appended" + Environment.NewLine +
                                 "       -timefmt \"xxx\"       xxx can be Invariant or a .NET DateTime format string for CSV output. See https://msdn.microsoft.com/en-us/library/8kb3ddd4(v=vs.110).aspx" + Environment.NewLine +
                                 "       -time    \"Mon...\"  Supply an external time string which is put into the Time column of the CSV output. This helps to group by time for a specific snapshot in Excel because otherwise MemAnalyzer will" + Environment.NewLine +
@@ -290,6 +296,7 @@ namespace MemAnalyzer
                             {
                                 ParseTopNQuery(args.Dequeue(), out int n, out int MinCount);
                                 TopN = n > 0 ? n : TopN;
+                                TopNExplicit |= n > 0;
                             }
                             break;
                         case "-dtn":
@@ -298,6 +305,7 @@ namespace MemAnalyzer
                             {
                                 ParseTopNQuery(args.Dequeue(), out int n, out MinCount);
                                 TopN =  n > 0 ? n : TopN;
+                                TopNExplicit |= n > 0;
                             }
                             break;
                         case "-live":
@@ -316,6 +324,7 @@ namespace MemAnalyzer
                             if (args.Count > 0 && NotAnArg(args.Peek(), false) != null)
                             {
                                 TopN = int.Parse(args.Dequeue());
+                                TopNExplicit = true;
                             }
                             break;
                         case "-showaddress":
@@ -323,8 +332,8 @@ namespace MemAnalyzer
                             break;
                         case "-o":
                             OutFile = NotAnArg(args.Dequeue());
-                            TopN = 20 * 1000; // if output is dumped to file pipe all types to output
-                                              // if later -dts/-dstrings/-dtn is specified one can still override this behavior.
+                            if (!TopNExplicit) TopN = 0; // no topN limit when saving to file: all entries are written.
+                                              // if -dts/-dstrings/-dtn specifies N explicitly one can still override this behavior.
                             break;
                         case "-overwrite":
                             OverWriteOutFile = true;

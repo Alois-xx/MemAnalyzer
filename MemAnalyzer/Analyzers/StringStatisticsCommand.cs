@@ -85,9 +85,9 @@ namespace MemAnalyzer
             }
             else
             {
-                if (topN > 0)
                 {
-                    var sorted = res.Result.StringCounts.OrderByDescending(kvp => kvp.Value.InstanceCount).Take(topN);
+                    var ranked = res.Result.StringCounts.OrderByDescending(kvp => kvp.Value.InstanceCount);
+                    var sorted = topN > 0 ? ranked.Take(topN) : ranked; // topN <= 0 means no limit: write all strings
                     OutputStringWriter.FormatAndWrite("{0}\t{1}\t{2}", "Strings(Count)", $"Waste({DisplayUnit})", "String");
                     string fmt = "{0,-12}\t{1,-11:N0}\t{2}";
                     foreach (var kvp in sorted)
@@ -112,8 +112,10 @@ namespace MemAnalyzer
 
         private void PrintDiff(int topN, StringAnalysisResult res, StringAnalysisResult res2)
         {
-            var top = res.StringCounts.OrderByDescending(kvp => kvp.Value.InstanceCount).Take(topN).ToDictionary(x => x.Key, x => x.Value);
-            var top2 = res2.StringCounts.OrderByDescending(kvp => kvp.Value.InstanceCount).Take(topN).ToDictionary(x=> x.Key, x=> x.Value);
+            var ranked = res.StringCounts.OrderByDescending(kvp => kvp.Value.InstanceCount);
+            var ranked2 = res2.StringCounts.OrderByDescending(kvp => kvp.Value.InstanceCount);
+            var top = (topN > 0 ? ranked.Take(topN) : ranked).ToDictionary(x => x.Key, x => x.Value); // topN <= 0 means no limit
+            var top2 = (topN > 0 ? ranked2.Take(topN) : ranked2).ToDictionary(x => x.Key, x => x.Value);
 
             HashSet<string> uniqueStringValues = new HashSet<string>(top.Select(x => x.Key).Concat(top2.Select(x => x.Key)).ToArray());
             List<StringDiff> diffs = new List<StringDiff>();

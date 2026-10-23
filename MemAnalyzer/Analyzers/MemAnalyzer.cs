@@ -77,7 +77,7 @@ namespace MemAnalyzer
         /// <summary>
         /// Dump types by size or by count.
         /// </summary>
-        /// <param name="topN">Only print the first N types ordered by size or count.</param>
+        /// <param name="topN">Only print the first N types ordered by size or count. N &lt;= 0 means no limit (print all types).</param>
         /// <param name="orderBySize">If true types are sorted by size. Otherwise by count.</param>
         /// <returns>Allocated memory in KB if VMMap data is available. Otherwise only the allocated managed heap size in KB is returned.</returns>
         /// <remarks>The returned value is returned, if no other error has occurred from the Main method. That allows test automation to trigger e.g. a dump of 
@@ -171,9 +171,9 @@ namespace MemAnalyzer
             // can be null if only live objects are considered.
             var free = typeInfos.FirstOrDefault(x => x.Name == FreeTypeName);
 
-            if (topN > 0)
             {
-                foreach (var type in typeInfos.Take(topN))
+                var topTypes = topN > 0 ? typeInfos.Take(topN) : typeInfos; // topN <= 0 means no limit: write all types
+                foreach (var type in topTypes)
                 {
                     if (free != null && type == free)
                     {
@@ -236,9 +236,9 @@ namespace MemAnalyzer
 
             long unitDivisor = (long)DisplayUnit;
 
-            if (topN > 0)
             {
-                foreach (var diff in delta.TypeDiffs.Take(topN))
+                var topDiffs = topN > 0 ? delta.TypeDiffs.Take(topN) : delta.TypeDiffs; // topN <= 0 means no limit: write all diffs
+                foreach (var diff in topDiffs)
                 {
                     if (diff.Name == FreeTypeName)
                     {
