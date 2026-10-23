@@ -81,7 +81,7 @@ It can show which objects use most space on the managed heap just like !DumpHeap
 
 ## Command Line Help
 
-	MemAnalyzer 2.5.0.0 by Alois Kraus 2017
+	MemAnalyzer 3.1.0.0 by Alois Kraus 2017-2026
 	Usage:
 		   MemAnalyzer [ -f DumpFile or -pid ddd [ -f2 DumpFile or -pid2 ddd ] -dts [N] or -dtn [N] or -dstrings [N] [-live] [-unit DisplayUnit] [-vmmap] ]
 					   [-o Output.csv [-sep \t] [-noexcelsep] [-time "externalTime"]]
@@ -103,6 +103,9 @@ It can show which objects use most space on the managed heap just like !DumpHeap
 		   -silent              Suppress information messages
 	 Dump Creation:
 		   -procdump args       Create a memory dump and VMMap snapshot of a process. Needs procdump.exe and vmmap.exe in the path to work
+		                          With -vmmap the VMMap rows of the snapshot are also written to the CSV/console output like for a live process
+		                          MemAnalyzer options which procdump cannot accept, e.g. -vmmap or -unit, are applied to MemAnalyzer also after -procdump. procdump switches such as -f and -o stay with procdump.
+		                          procdump.exe, procdumpw.exe or procdump64.exe is searched in the path and in the folder of MemAnalyzer. UTF-16 output of procdump is handled and procdump errors report the exit code.
 		   -verifydump          Used with -procdump. This checks the managed heap for consistency to be sure that it can be loaded later
 	 CSV Output
 		   -o output.csv        Write output to csv file instead of console
@@ -125,7 +128,12 @@ It can show which objects use most space on the managed heap just like !DumpHeap
 			MemAnalyzer -f dump1.dmp -f2 dump2.dmp -dts -vmmap
 	Dump string duplicates of live process and write it to CSV file
 			MemAnalyzer -pid ddd -dstrings -o StringDuplicates.csv
-	Create a full process dump along with VMMap information if VMMap is in the path. Procdump will expand PROCESSNAME, PID, ... by itself
+	Create a full process dump. Procdump will expand PROCESSNAME, PID, ... by itself and print a quick summary.
 			MemAnalyzer -procdump -ma pid C:\temp\PROCESSNAME_PID_YYMMDD_HHMMSS.dmp
+	Same dump where the VMMap rows of the snapshot are written additionally besides the dump file as csv.
+	Options which procdump cannot accept (e.g. -vmmap) are applied to MemAnalyzer also when they follow -procdump; procdump switches such as -f and -o stay with procdump.
+			MemAnalyzer -vmmap -procdump -ma pid C:\temp\PROCESSNAME_PID_YYMMDD_HHMMSS.dmp
+	Analyze memory dump with associated vmmap data
+			MemAnalyzer.exe  -vmmap -f c:\temp\PerfWatson2.exe_2600_261023_141344.dmp
 
 

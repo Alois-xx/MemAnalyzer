@@ -20,12 +20,8 @@ namespace MemAnalyzer
 
         TargetInformation TargetInfo;
 
-        // Additional columns which are printed when CSV output is active
-        string ProcessName;
-        string CmdLine;
-        string TimeAndOrDate;
-        string Context;
-        bool IsFirstLine = true;
+        // Writes the report lines including the additional columns which are printed when CSV output is active
+        ReportWriter report;
 
 
 
@@ -67,11 +63,7 @@ namespace MemAnalyzer
         {
             GetVMMapData = bGetVMMapData;
             TargetInfo = info;
-            ProcessName = TargetInfo.IsLiveProcess? TargetInformation.GetProcessName(TargetInfo.Pid1) : "";
-            CmdLine = TargetInfo.IsLiveProcess ? TargetInformation.GetProcessCmdLine(TargetInfo.Pid1) : "";
-            DateTime now = TargetInfo.CurrentTimeOrDumpCreationDate;
-            TimeAndOrDate = TargetInfo.ExternalTime ?? (timeFormat == "Invariant" ? now.ToString(CultureInfo.InvariantCulture) : now.ToString(timeFormat));
-            Context = context;
+            report = new ReportWriter(info, displayunit, timeFormat, context);
         }
 
         /// <summary>
@@ -122,32 +114,7 @@ namespace MemAnalyzer
         /// <param name="type">Type name</param>
         void WriteTypeStatisticsLine(long allocated, long instances, string type)
         {
-            // Default format string for console output. 
-            // fmt is ignored for CSV output where all columns are simply \t separated. 
-            string fmt = "{0,-17:N0}\t{1,-17:N0}\t{2}";
-
-            if (IsFirstLine)
-            {
-                string[] header = new string[] { AllocatedColumnBase + DisplayUnit, InstancesColumn, TypeColumn };
-
-                if (OutputStringWriter.CsvOutput)
-                {
-                    header = header.Concat(new string[] { ProcessIdColumn, TimeColumn, CommandeLineColumn, AgeColumn, NameColumn, ContextColumn }).ToArray();
-                }
-
-                // write header
-                OutputStringWriter.FormatAndWriteHeader(fmt,header);
-                IsFirstLine = false;
-            }
-
-            if (OutputStringWriter.CsvOutput)
-            {
-                OutputStringWriter.FormatAndWrite(fmt, allocated, instances, type, TargetInfo.IsLiveProcess ? TargetInfo.Pid1.ToString() : "", TimeAndOrDate, CmdLine,  TargetInfo.ProcessAgeInSeconds, TargetInfo.ProcessName, Context);
-            }
-            else
-            {
-                OutputStringWriter.FormatAndWrite(fmt, allocated, instances == 0 ? "" : (object) instances, type);
-            }
+            report.WriteLine(allocated, instances, type);
         }
 
         /// <summary>
@@ -198,7 +165,7 @@ namespace MemAnalyzer
             if (GetVMMapData)
             {
                 VMMapData data = GetVMMapDataFromProcess(true, TargetInfo, Heap);
-                WriteVMMapData(GetSimpleTypeFormatter(DisplayUnit), data);
+                report.WriteVMMapData(data);
                 WriteTypeStatisticsLine((long) ((managedAllocatedBytes + data.AllocatedBytesWithoutManagedHeap) / (long)DisplayUnit), 0, AllocatedTotal);
                 allocatedMemoryInKB += (int)(data.AllocatedBytesWithoutManagedHeap / (long)DisplayUnit.KB);
             }
@@ -357,28 +324,7 @@ namespace MemAnalyzer
         }
 
         /// <summary>
-        /// Write VMMap data with given formatter function.
-        /// </summary>
-        /// <param name="formatter"></param>
-        /// <param name="vm"></param>
-        void WriteVMMapData(Action<string, long> formatter, VMMapData vm)
-        {
-            // free blocks only play a role in x86 
-            if (vm.LargestFreeBlockBytes < 4 * 1024 * 1024 * 1024L)
-            {
-                formatter(VMMapData.Col_Reserved_LargestFreeBlock, vm.LargestFreeBlockBytes);
-            }
-            formatter(VMMapData.Col_Reserved_Stack, vm.Reserved_Stack);
-            formatter(VMMapData.Col_Committed_Dll, vm.Committed_DllBytes);
-            formatter(VMMapData.Col_Committed_Heap, vm.Committed_HeapBytes);
-            formatter(VMMapData.Col_Committed_MappedFile, vm.Committed_MappedFileBytes);
-            formatter(VMMapData.Col_Committed_Private, vm.Committed_PrivateBytes);
-            formatter(VMMapData.Col_Committed_Shareable, vm.Committed_ShareableBytes);
-            formatter(VMMapData.Col_Committed_Total, vm.TotalCommittedBytes);
-        }
-
-        /// <summary>
-        /// Write VMMap data with given formatter function.
+        /// Write VMMap data diff rows with given formatter function.
         /// </summary>
         /// <param name="formatter"></param>
         /// <param name="vm"></param>
@@ -413,22 +359,6 @@ namespace MemAnalyzer
                 OutputStringWriter.FormatAndWrite(fmt, (long) (sizeInBytesDiff/unitDivisor), "", "", "", (long) (sizeInBytes1/ unitDivisor) , (long) (sizeInBytes2/unitDivisor), "", "", typeName+unit);
             };
         }
-
-        /// <summary>
-        /// Format a type with no instance count.
-        /// </summary>
-        /// <param name="fmt">Type format string.</param>
-        /// <param name="unit">Unit in which tye type is formatted.</param>
-        /// <returns>Delegate which will format the type and its size in the respective unit.</returns>
-        Action<string, long> GetSimpleTypeFormatter(DisplayUnit unit)
-        {
-            return (typeName, sizeInBytes) =>
-            {
-                long unitDivisor = (long)unit;
-                WriteTypeStatisticsLine((long)(sizeInBytes / unitDivisor), 0, typeName);
-            };
-        }
-
 
         /// <summary>
         /// Get VMMap data from process

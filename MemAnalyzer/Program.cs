@@ -43,6 +43,7 @@ namespace MemAnalyzer
                                 "       -pid ddd             Live process to analyze." + Environment.NewLine +
                                 "       -pid2 ddd            Second live process to diff. You can also mix to compare e.g. a dump and a live process e.g. -pid2 ddd -f dump.dmp" + Environment.NewLine +
                                 "       -vmmap               Fetch from live processes VMMAP data. VMMap.exe must be in the path to work." + Environment.NewLine +
+                                "                          With -procdump the VMMap rows of the snapshot are additionally written to the CSV/console output." + Environment.NewLine +
                                $"       -dts N               (default) Dump top N types by object size. Default for N is {TopN}." + Environment.NewLine +
                                $"       -dtn N               Dump top N types by object count. Default for N is {TopN}." + Environment.NewLine +
                                 "                            N can be a number or ddd;N#dd where the first number ddd is a threshold value to consider only types with an instance count greater ddd. The second number is the TopN number" + Environment.NewLine +
@@ -55,6 +56,9 @@ namespace MemAnalyzer
                                 "       -silent              Suppress information messages" + Environment.NewLine +
                                 " Dump Creation:  " + Environment.NewLine +
                                 "       -procdump args       Create a memory dump and VMMap snapshot of a process. Needs procdump.exe and vmmap.exe in the path to work" + Environment.NewLine +
+                                "                          With -vmmap the VMMap rows of the snapshot are also written to the CSV/console output like for a live process" + Environment.NewLine +
+                                "                          MemAnalyzer options which procdump cannot accept, e.g. -vmmap or -unit, are applied to MemAnalyzer also after -procdump. procdump switches such as -f and -o stay with procdump." + Environment.NewLine +
+                                "                          procdump.exe, procdumpw.exe or procdump64.exe is searched in the path and in the folder of MemAnalyzer. UTF-16 output of procdump is handled" + Environment.NewLine +
                                 "       -verifydump          Used with -procdump. This checks the managed heap for consistency to be sure that it can be loaded later" + Environment.NewLine +
                                 " CSV Output " + Environment.NewLine +
                                 "       -o output.csv        Write output to csv file instead of console. By default all entries are written (topN is not applied); an explicit N for -dts/-dtn/-dstrings still limits the output" + Environment.NewLine +
@@ -89,7 +93,36 @@ namespace MemAnalyzer
 
         private string[] Args;
 
-        string[] ProcDumpArgs = null;
+        internal List<string> ProcDumpArgs = new List<string>();
+
+        // procdump switches as listed by "procdump -?". Arguments after -procdump which are not in this list are
+        // MemAnalyzer options and are not handed to procdump. -f and -o are procdump switches (include filter and
+        // overwrite dump file) and stay with procdump.
+        static readonly HashSet<string> ProcDumpSwitches = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "-a","-at","-b","-c","-cl","-ct","-dc","-e","-et","-f","-fx","-g","-h","-i","-j","-k","-l","-ld","-m",
+            "-mc","-md","-me","-mm","-ml","-mp","-mt","-mx","-n","-o","-p","-pl","-r","-s","-t","-u","-ud","-w",
+            "-x","-wer","-64","-accepteula",
+        };
+
+        // MemAnalyzer options. They are recognized also when they appear after -procdump.
+        static readonly HashSet<string> MemAnalyzerSwitches = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "-f","-f2","-pid","-pid2","-child","-silent","-unit","-vmmap","-procdump","-verifydump","-renameproc",
+            "-debug","-noexcelsep","-sep","-dts","-dtn","-live","-dacdir","-process","-dstrings","-showaddress",
+            "-o","-overwrite","-timefmt","-time","-context",
+        };
+
+        /// <summary>
+        /// Check if an argument which follows -procdump is a MemAnalyzer option that procdump cannot accept, e.g. -vmmap.
+        /// </summary>
+        /// <param name="arg">Argument which follows -procdump.</param>
+        /// <returns>True if MemAnalyzer handles this argument instead of passing it to procdump.exe.</returns>
+        internal static bool IsMemAnalyzerSwitchOnly(string arg)
+        {
+            string a = arg.ToLower();
+            return MemAnalyzerSwitches.Contains(a) && !ProcDumpSwitches.Contains(a);
+        }
 
         /// <summary>
         /// If true the dump file written with ProcDump is tried to load into MemAnalyzer to check if the heap 
@@ -215,7 +248,7 @@ namespace MemAnalyzer
             }
         }
 
-        private bool Parse()
+        internal bool Parse()
         {
             Queue<string> args = new Queue<string>(Args);
             if( args.Count == 0)
@@ -227,9 +260,21 @@ namespace MemAnalyzer
             bool lret = true;
             try
             {
+                bool inProcDumpArgs = false;
+
                 while (args.Count > 0)
                 {
                     string param = args.Dequeue();
+
+                    // Everything which follows -procdump is handed to procdump.exe. MemAnalyzer options which
+                    // procdump cannot accept, e.g. -vmmap, are still parsed by MemAnalyzer so that the order of
+                    // the options does not matter. procdump switches like -o or -f stay with procdump.
+                    if (inProcDumpArgs && !IsMemAnalyzerSwitchOnly(param))
+                    {
+                        ProcDumpArgs.Add(param);
+                        continue;
+                    }
+
                     switch (param.ToLower())
                     {
                         case "-f":
@@ -268,9 +313,9 @@ namespace MemAnalyzer
                             break;
                         case "-procdump":
                             Action = Actions.ProcDump;
-                            // give remaining args to procdump and to not try to parse them by ourself
-                            ProcDumpArgs = args.ToArray();
-                            args.Clear();
+                            // The remaining args belong to procdump. They are not parsed by ourself, with the
+                            // exception of MemAnalyzer options which procdump cannot accept (see above).
+                            inProcDumpArgs = true;
                             break;
                         case "-verifydump":
                             VerifyDump = true;
@@ -497,6 +542,19 @@ namespace MemAnalyzer
             {
                 TargetInformation.LoadProcessRenameFile(ProcessRenameFile);
 
+                if (Action == Actions.ProcDump && GetVMMapData)
+                {
+                    // Resolve the pid of the process which procdump dumps up front. Then the CSV columns (ProcessId,
+                    // Time, CommandLine, Age(s), Name) and the default -o file name are the same as for a live
+                    // process run with -vmmap.
+                    string exeName;
+                    int pid = DumpCreator.ResolveTargetPid(ProcDumpArgs.ToArray(), out exeName);
+                    if (pid != 0 && NativeMethods.ProcessExists(pid))
+                    {
+                        TargetInformation.Pid1 = pid;
+                    }
+                }
+
                 if (UseDefaultOutFileName)
                 {
                     OutFile = GetDefaultOutputFileName();
@@ -523,7 +581,9 @@ namespace MemAnalyzer
                     FileStream file = new FileStream(OutFile, (OverWriteOutFile || TargetInformation.IsProcessCompare) ? FileMode.Create : FileMode.Append);
                     OutputStringWriter.Output = new StreamWriter(file);
                 }
-                analyzer = CreateAnalyzer(Action);
+                // -procdump creates a dump and a VMMap snapshot, it does not analyze a heap. Do not attach to the
+                // target process here just because the pid of the dumped process is known for the CSV report.
+                analyzer = Action == Actions.ProcDump ? null : CreateAnalyzer(Action);
 
                 switch (Action)
                 {
@@ -549,7 +609,14 @@ namespace MemAnalyzer
                         break;
                     case Actions.ProcDump:
                         DumpCreator dumper = new DumpCreator(IsDebug, VerifyDump);
-                        dumper.Dump(ProcDumpArgs);
+                        string dumpFileName = dumper.Dump(ProcDumpArgs.ToArray());
+                        if (GetVMMapData && dumper.VmMapData.HasValues)
+                        {
+                            DebugPrinter.Write("VMMap snapshot written to {0}", TargetInformation.GetAssociatedVMMapFile(dumpFileName));
+                            // Write the VMMap rows of the snapshot which was written next to the dump into the
+                            // CSV/console output exactly like a live process run with -vmmap does.
+                            new ReportWriter(TargetInformation, DisplayUnit, TimeFormat, Context).WriteVMMapData(dumper.VmMapData);
+                        }
                         break;
                     default:
                         throw new NotSupportedException(String.Format("Command {0} is not recognized as a valid command", this.Action));
