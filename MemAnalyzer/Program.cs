@@ -58,6 +58,7 @@ namespace MemAnalyzer
                                 "       -verifydump          Used with -procdump. This checks the managed heap for consistency to be sure that it can be loaded later" + Environment.NewLine +
                                 " CSV Output " + Environment.NewLine +
                                 "       -o output.csv        Write output to csv file instead of console. By default all entries are written (topN is not applied); an explicit N for -dts/-dtn/-dstrings still limits the output" + Environment.NewLine +
+                                "                            Without file name the default is the dump file name + .csv or processname_pid_timestamp.csv for a live process. With two targets (-f2/-pid2) _Diff_<second target name> is inserted" + Environment.NewLine +
                                 "       -overwrite           Overwrite CSV output if file already exist. Otherwise it is appended" + Environment.NewLine +
                                 "       -timefmt \"xxx\"       xxx can be Invariant or a .NET DateTime format string for CSV output. See https://msdn.microsoft.com/en-us/library/8kb3ddd4(v=vs.110).aspx" + Environment.NewLine +
                                 "       -time    \"Mon...\"  Supply an external time string which is put into the Time column of the CSV output. This helps to group by time for a specific snapshot in Excel because otherwise MemAnalyzer will" + Environment.NewLine +
@@ -114,6 +115,12 @@ namespace MemAnalyzer
         /// Overwrite CSV file 
         /// </summary>
         bool OverWriteOutFile = false;
+
+        /// <summary>
+        /// Set when -o is used without a file name. The default file name is the dump file name + .csv for dump files
+        /// or processname_pid_timestamp.csv for live processes.
+        /// </summary>
+        bool UseDefaultOutFileName = false;
 
         /// <summary>
         /// By default the first line of the CSV file will contain the line Sep= 
@@ -331,7 +338,15 @@ namespace MemAnalyzer
                             ShowAddress = true;
                             break;
                         case "-o":
-                            OutFile = NotAnArg(args.Dequeue());
+                            if (args.Count > 0 && NotAnArg(args.Peek(), false) != null)
+                            {
+                                OutFile = args.Dequeue();
+                            }
+                            else
+                            {
+                                // no file name given -> default name, see GetDefaultOutputFileName
+                                UseDefaultOutFileName = true;
+                            }
                             if (!TopNExplicit) TopN = 0; // no topN limit when saving to file: all entries are written.
                                               // if -dts/-dstrings/-dtn specifies N explicitly one can still override this behavior.
                             break;
@@ -398,6 +413,63 @@ namespace MemAnalyzer
             DebugPrinter.Write($"N: {n}, MinCount: {minCount}");
         }
 
+        /// <summary>
+        /// Default output file name when -o was used without a file name: the dump file name + .csv for dump files,
+        /// processname_pid_timestamp.csv for live processes. When two targets are compared (two dumps or two processes)
+        /// the second target name is appended as _Diff_&lt;name or processname_pid&gt;.
+        /// </summary>
+        private string GetDefaultOutputFileName()
+        {
+            string name;
+            bool isLive = TargetInformation.IsLiveProcess;
+
+            if (!String.IsNullOrEmpty(TargetInformation.DumpFileName1))
+            {
+                name = TargetInformation.DumpFileName1; // keep the directory of the dump file
+            }
+            else if (TargetInformation.Pid1 != 0)
+            {
+                name = SanitizeFileNamePart(TargetInformation.ProcessName) + "_" + TargetInformation.Pid1;
+            }
+            else
+            {
+                return "MemAnalyzer" + TargetInformation.CSVExtension; // fallback when neither dump nor pid was specified
+            }
+
+            if (TargetInformation.IsProcessCompare)
+            {
+                name += "_Diff_";
+                if (!String.IsNullOrEmpty(TargetInformation.DumpFileName2))
+                {
+                    name += Path.GetFileName(TargetInformation.DumpFileName2);
+                }
+                else
+                {
+                    string processName = TargetInformation.Renamer.Rename(TargetInformation.GetProcessName(TargetInformation.Pid2),
+                                                                         TargetInformation.GetProcessCmdLine(TargetInformation.Pid2));
+                    name += SanitizeFileNamePart(processName) + "_" + TargetInformation.Pid2;
+                }
+            }
+
+            // timestamp only for live processes, same as the single target default name format
+            if (isLive)
+            {
+                name += "_" + DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
+            }
+
+            return name + TargetInformation.CSVExtension;
+        }
+
+        static string SanitizeFileNamePart(string name)
+        {
+            foreach (char c in Path.GetInvalidFileNameChars())
+            {
+                name = name.Replace(c, '_');
+            }
+
+            return name;
+        }
+
         string NotAnArg(string arg, bool bthrow=true)
         {
             if( arg.StartsWith("-") )
@@ -425,6 +497,10 @@ namespace MemAnalyzer
             {
                 TargetInformation.LoadProcessRenameFile(ProcessRenameFile);
 
+                if (UseDefaultOutFileName)
+                {
+                    OutFile = GetDefaultOutputFileName();
+                }
 
                 if (!String.IsNullOrEmpty(OutFile))
                 {
