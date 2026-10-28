@@ -51,7 +51,10 @@ namespace MemAnalyzer_uTest
             var process = DumpCreatorTests.AllocStrings(exe, n);
             string dumpfile = creator.Dump(new string[] { "-ma", $"{process.Id}", $"{dumpFile}" });
             Assert.True(dumpfile != null, $"Dump {dumpFile} could not be created");
-            process.Kill();
+            if (!process.HasExited)
+            {
+                process.Kill();
+            }
         }
 
 
@@ -163,8 +166,56 @@ namespace MemAnalyzer_uTest
 
             Assert.True(bytes > 24 * 1000 * 1000, $"Allocated strings must be > 25MB but was {bytes} bytes");
             Assert.True(count > 500 * 1000, $"Allocated string cont must be > 500K but was {count}");
-            
 
+
+        }
+
+        [Fact]
+        public void Diff_Of_Two_Dumps_Is_Written_To_Default_Csv_File_x86()
+        {
+            const string String100Kx86 = "Strings100Kx86.dmp";
+            if (!File.Exists(String100Kx86))
+            {
+                AllocateAndDump(StringAllocx86, 2 * N50K, String100Kx86);
+            }
+
+            string csvFile = $"{String50Kx86}_Diff_{String100Kx86}.csv";
+            if (File.Exists(csvFile))
+            {
+                File.Delete(csvFile);
+            }
+
+            int LeakInKB = StartMemAnalyzer($"-f {String50Kx86} -f2 {String100Kx86} -o -unit Bytes", out string output);
+            Console.WriteLine(output);
+
+            Assert.True(File.Exists(csvFile), $"Diff csv file {csvFile} was not created. Output: {output}");
+            Assert.True(LeakInKB > 0, $"Leak must be positive but was {LeakInKB} KB");
+
+            string[] lines = File.ReadAllLines(csvFile);
+            Assert.Equal("sep=\t", lines[0]);
+
+            string[] header = lines[1].Split('\t');
+            Assert.Equal(new string[] { "Delta(Bytes)", "Delta(Instances)", "Instances", "Instances2", "Allocated(Bytes)", "Allocated2(Bytes)", "AvgSize(Bytes)", "AvgSize2(Bytes)", "Type" }, header);
+
+            string[] stringRow = lines.Skip(2).Select(x => x.Split('\t')).SingleOrDefault(x => x.Length == 9 && x[8] == "System.String");
+            Assert.NotNull(stringRow);
+
+            long deltaBytes = long.Parse(stringRow[0]);
+            long deltaInstances = long.Parse(stringRow[1]);
+            long instances = long.Parse(stringRow[2]);
+            long instances2 = long.Parse(stringRow[3]);
+            long allocated = long.Parse(stringRow[4]);
+            long allocated2 = long.Parse(stringRow[5]);
+
+            // Dumps contain also not yet collected temporary strings (no -live) so only lower bounds can be checked
+            Assert.True(instances >= N50K, $"First dump must contain at least {N50K} strings but has {instances}");
+            Assert.True(instances2 >= 2 * N50K, $"Second dump must contain at least {2 * N50K} strings but has {instances2}");
+            Assert.True(deltaInstances >= N50K, $"String instance delta must be at least {N50K} but was {deltaInstances}");
+            Assert.Equal(instances2 - instances, deltaInstances);
+            Assert.Equal(allocated2 - allocated, deltaBytes);
+            Assert.True(deltaBytes > N50K * 20, $"String delta must be > {N50K * 20} bytes but was {deltaBytes}");
+
+            Assert.Contains(lines, x => x.EndsWith("Managed Heap(Allocated)!"));
         }
 
     }
